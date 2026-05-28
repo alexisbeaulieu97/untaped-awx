@@ -20,7 +20,8 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from untaped.settings import get_settings
+from untaped.plugins import PluginRegistry, set_current_registry
+from untaped.settings import get_settings, reset_config_registry_for_tests
 
 from untaped_awx.infrastructure import AwxConfig
 
@@ -492,8 +493,12 @@ def _err(status: int, detail: str) -> httpx.Response:
 
 @pytest.fixture(autouse=True)
 def _reset_settings_cache() -> Iterator[None]:
+    reset_config_registry_for_tests()
+    set_current_registry(PluginRegistry())
     get_settings.cache_clear()
     yield
+    reset_config_registry_for_tests()
+    set_current_registry(PluginRegistry())
     get_settings.cache_clear()
 
 

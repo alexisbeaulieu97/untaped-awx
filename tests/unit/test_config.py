@@ -7,18 +7,27 @@ a test failure, not as a silent runtime drop.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 from pydantic import SecretStr
 from untaped import get_settings_model
-from untaped.settings import get_settings
+from untaped.plugins import PluginRegistry, register_plugins
+from untaped.settings import get_settings, reset_config_registry_for_tests
 
 from untaped_awx.infrastructure import AwxConfig
+from untaped_awx.plugin import plugin as awx_plugin
 
 
 @pytest.fixture(autouse=True)
-def _reset_settings_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+def _registered_awx_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Settings() reads YAML by default — give every test a clean env."""
     monkeypatch.setenv("UNTAPED_CONFIG", "/nonexistent/path.yml")
+    reset_config_registry_for_tests()
+    register_plugins(PluginRegistry(), [awx_plugin])
+    get_settings.cache_clear()
+    yield
+    reset_config_registry_for_tests()
     get_settings.cache_clear()
 
 
