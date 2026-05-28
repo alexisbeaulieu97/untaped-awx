@@ -11,8 +11,9 @@ the [`untaped` core repo](https://github.com/alexisbeaulieu97/untaped).
 (`base_url`, `token`, `api_prefix`, `default_organization`, `page_size`).
 The plugin registers this model as the `awx` profile settings section, and
 CLI composition roots read it with `get_config_section("awx", AwxConfig)`.
-`application/`, `infrastructure/`, and `domain/` depend on `AwxConfig` so
-`untaped-awx` is extractable as a standalone library.
+Plugin registration and CLI composition roots may import `AwxConfig`;
+infrastructure clients receive it as package-local configuration. Domain and
+application code stay config-free and depend on narrow models/ports instead.
 
 Adding a new field is a three-place edit: `AwxConfig`, the call site that
 needs the value, and tests for loading/env override where relevant.

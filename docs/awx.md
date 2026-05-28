@@ -277,13 +277,15 @@ multiple kinds are present, `untaped` orders them by their declared FK
 dependencies so referenced resources exist before referencing ones:
 
 ```text
-Organization → CredentialType → Credential → Project → Inventory
+Organization → CredentialType → Credential → Project → Inventory → Host
+            → Group → ExecutionEnvironment → Label → InstanceGroup
             → JobTemplate → WorkflowJobTemplate → Schedule
 ```
 
 Catalog-only kinds (`ExecutionEnvironment`, `Label`, `InstanceGroup`)
-exist solely so launch and apply payloads can resolve names to ids;
-they have no CLI sub-app and don't take part in the ordering above.
+exist solely so launch and apply payloads can resolve names to ids. They
+appear in the spec order for FK lookup tie-breaking, but have no CLI sub-app
+and are not standalone apply/save targets.
 
 Per-kind `apply` (e.g. `awx job-templates apply`) only writes its own
 kind — wrong-kind docs in the file are warned about and never written.
