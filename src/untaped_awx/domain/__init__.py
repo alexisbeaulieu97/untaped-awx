@@ -1,6 +1,12 @@
 from untaped_awx.domain.envelope import API_VERSION, IdentityRef, Metadata, Resource
 from untaped_awx.domain.job import TERMINAL_STATUSES, Job, JobEvent
-from untaped_awx.domain.outcomes import ApplyAction, ApplyOutcome, FieldChange
+from untaped_awx.domain.outcomes import (
+    ApplyAction,
+    ApplyOutcome,
+    FieldChange,
+    SaveAction,
+    SaveOutcome,
+)
 from untaped_awx.domain.payloads import ActionPayload, ServerRecord, WritePayload
 from untaped_awx.domain.ping import PingStatus
 from untaped_awx.domain.spec import (
@@ -34,6 +40,8 @@ __all__ = [
     "PingStatus",
     "Resource",
     "ResourceSpec",
+    "SaveAction",
+    "SaveOutcome",
     "ServerRecord",
     "WorkflowNode",
     "WorkflowNodeType",

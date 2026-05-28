@@ -32,7 +32,6 @@ from untaped_awx.application import (
     GetJob,
     ListJobs,
     Ping,
-    SaveResource,
     StreamJobEvents,
     TailJobLogs,
     WatchJob,
@@ -42,16 +41,13 @@ from untaped_awx.cli._apply_runner import resolve_apply_file, run_apply
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._factory import make_resource_app
+from untaped_awx.cli._save_runner import run_save_batch
 from untaped_awx.cli.test_commands import app as test_app
 from untaped_awx.cli.unified_templates_commands import app as unified_templates_app
 from untaped_awx.cli.workflow_node_commands import register_nodes_command
-from untaped_awx.domain import Job, JobEvent, Metadata
-from untaped_awx.errors import AwxApiError
+from untaped_awx.domain import Job, JobEvent
 from untaped_awx.infrastructure import AwxClient, AwxConfig
-from untaped_awx.infrastructure.catalog import AwxResourceCatalog
-from untaped_awx.infrastructure.spec import AwxResourceSpec
 from untaped_awx.infrastructure.specs import ALL_SPECS
-from untaped_awx.infrastructure.yaml_io import dump_resource
 
 app = typer.Typer(
     name="awx",
@@ -205,136 +201,14 @@ def save_top_command(
     filters = parse_kv_pairs(filter_, flag="--filter")
 
     with report_errors(), open_context() as ctx:
-        target_specs = (
-            list(ALL_SPECS) if all_kinds else [_resolve_kind(ctx.catalog, kind)]  # type: ignore[arg-type]
+        run_save_batch(
+            ctx,
+            out_dir=out_dir,
+            all_kinds=all_kinds,
+            kind=kind,
+            filters=filters,
+            print_paths=print_paths,
         )
-        save = SaveResource(ctx.repo, ctx.fk)
-        # Expand once so ``out_dir.mkdir`` and the per-record
-        # ``target.write_text`` agree on the same on-disk location
-        # (``--out-dir ~/dump`` would otherwise create a literal
-        # ``./~/dump`` dir while files landed in ``$HOME/dump``).
-        out_dir = out_dir.expanduser()
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for spec in target_specs:
-            if spec.fidelity == "read_only":
-                typer.echo(
-                    f"skipping {spec.kind}: not roundtrippable in v0",
-                    err=True,
-                )
-                continue
-            if "save" not in spec.commands:
-                continue
-            incompatible = _filter_field_not_on_spec(filters, spec)
-            if incompatible is not None:
-                typer.echo(
-                    f"skipping {spec.kind}: filter field {incompatible!r} not on this kind",
-                    err=True,
-                )
-                continue
-            records = save.find_all(spec, params=filters or None)
-            for record in records:
-                resource = save.from_record(spec, record)
-                comment = spec.fidelity_note if spec.fidelity != "full" else None
-                target = out_dir / _resource_filename(spec.kind, resource.metadata)
-                _assert_inside(out_dir, target)
-                # Serialise once and fan-out to disk + stdout so each
-                # record renders to the same YAML body. (``typer.echo``
-                # appends its own newline, so the stream has an extra
-                # trailing ``\n`` per record vs the file body — both
-                # parse identically through ``yaml.safe_load_all``.)
-                text = dump_resource(resource, header_comment=comment)
-                target.write_text(text)
-                if print_paths:
-                    typer.echo(str(target))
-                else:
-                    # Leading ``---`` per doc so ``yaml.safe_load_all``
-                    # ingests the stream and ``apply`` round-trips.
-                    typer.echo("---")
-                    typer.echo(text)
-
-
-def _resolve_kind(catalog: AwxResourceCatalog, kind: str) -> AwxResourceSpec:
-    """Accept either the public CLI name (``job-templates``) or the
-    domain kind (``JobTemplate``)."""
-    try:
-        return catalog.by_cli_name(kind)
-    except AwxApiError:
-        return catalog.get(kind)
-
-
-def _filter_field_not_on_spec(filters: dict[str, str], spec: AwxResourceSpec) -> str | None:
-    """Return a filter field that doesn't exist on ``spec``, or None.
-
-    AWX's ``/schedules/`` has no ``organization`` field — sending
-    ``?organization__name=…`` 400s. This is a *conservative* heuristic
-    to skip kinds whose API can't possibly accept a given filter key,
-    union'ing every field name we know each kind exposes:
-
-    - ``canonical_fields`` (writable input fields)
-    - ``identity_keys`` (always queryable)
-    - ``read_only_fields`` (server-set; ``modified``, ``status``, …)
-    - ``fk_refs.field`` (FK columns)
-    - ``list_columns`` (we wouldn't display a column that doesn't exist)
-
-    AWX exposes more filterable fields than any spec enumerates, so a
-    false positive is possible — kinds whose specs lag the API will be
-    spuriously skipped on otherwise-valid filters. The recovery is
-    either to add the missing field to the spec or to run a per-kind
-    save without the filter. False *negatives* (sending an invalid
-    filter that AWX 400s on) are caught by the per-call error path.
-    """
-    fields = (
-        set(spec.canonical_fields)
-        | set(spec.identity_keys)
-        | set(spec.read_only_fields)
-        | set(spec.list_columns)
-        | {fk.field for fk in spec.fk_refs}
-    )
-    for key in filters:
-        base = key.split("__", 1)[0]
-        if base not in fields:
-            return base
-    return None
-
-
-_UNSAFE_FILENAME_CHARS = re.compile(r"[/\\\x00-\x1f]")
-
-
-def _safe_filename_segment(name: str) -> str:
-    """Return a filesystem-safe segment derived from an AWX resource name.
-
-    Replaces path separators and ASCII control chars with ``_``, collapses
-    leading/trailing dots so we can never produce ``..`` or ``.``, and falls
-    back to ``unnamed`` for empty results. The original name remains in the
-    saved YAML's metadata.
-    """
-    if not name:
-        return "unnamed"
-    cleaned = _UNSAFE_FILENAME_CHARS.sub("_", name).strip(". ")
-    return cleaned or "unnamed"
-
-
-def _assert_inside(parent: Path, target: Path) -> None:
-    """Refuse paths that resolve outside the intended parent directory."""
-    parent_resolved = parent.resolve()
-    try:
-        target.resolve().relative_to(parent_resolved)
-    except ValueError as exc:  # pragma: no cover — defensive guard
-        raise AwxApiError(f"refusing to write {target} — outside {parent_resolved}") from exc
-
-
-def _resource_filename(kind: str, metadata: Metadata) -> str:
-    """Encode the identity tuple in the filename so same-named records don't collide."""
-    parts: list[str] = [kind]
-    if metadata.parent is not None:
-        parts.append(metadata.parent.kind)
-        if metadata.parent.organization:
-            parts.append(metadata.parent.organization)
-        parts.append(metadata.parent.name)
-    elif metadata.organization is not None:
-        parts.append(metadata.organization)
-    parts.append(metadata.name)
-    return "__".join(_safe_filename_segment(p) for p in parts) + ".yml"
 
 
 # ---- jobs (read-only execution records) ----

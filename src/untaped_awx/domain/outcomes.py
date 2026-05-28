@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from untaped_awx.domain.envelope import Resource
+
 ApplyAction = Literal[
     "preview",
     "created",
@@ -42,4 +44,21 @@ class ApplyOutcome(BaseModel):
     changes: list[FieldChange] = Field(default_factory=list)
     preserved_secrets: list[str] = Field(default_factory=list)
     dropped_undeclared_secrets: list[str] = Field(default_factory=list)
+    detail: str | None = None
+
+
+SaveAction = Literal["saved", "skipped"]
+
+
+class SaveOutcome(BaseModel):
+    """The result of saving or skipping one resource record."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: str
+    name: str | None = None
+    action: SaveAction
+    resource: Resource | None = None
+    filename: str | None = None
+    header_comment: str | None = None
     detail: str | None = None

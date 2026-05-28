@@ -99,3 +99,44 @@ def test_specs_without_apply_command_are_read_only() -> None:
                 f"Either add 'apply' to commands or set fidelity='read_only', "
                 f"otherwise `untaped awx apply <file>` will issue writes."
             )
+
+
+def test_non_read_only_specs_expose_save_command() -> None:
+    """Top-level ``awx save`` uses fidelity to decide saveability.
+
+    If a future writable spec omitted the per-kind ``save`` command, the
+    bulk and per-kind save surfaces would drift. Keep those contracts
+    aligned at the spec layer rather than making application code read
+    CLI-only ``commands``.
+    """
+    missing = [
+        spec.kind
+        for spec in ALL_SPECS
+        if spec.fidelity != "read_only" and "save" not in spec.commands
+    ]
+    assert not missing
+
+
+def test_saveable_list_columns_are_domain_known_filter_fields() -> None:
+    """Bulk-save filter validation runs in application code using only
+    domain ``ResourceSpec`` fields. Any displayed list column that users
+    reasonably filter on must therefore also be represented by the
+    domain-known field set.
+    """
+    missing: list[str] = []
+    for spec in ALL_SPECS:
+        if spec.fidelity == "read_only":
+            continue
+        known_fields = (
+            set(spec.canonical_fields)
+            | set(spec.identity_keys)
+            | set(spec.read_only_fields)
+            | {fk.field for fk in spec.fk_refs}
+        )
+        missing.extend(
+            f"{spec.kind}.{column}"
+            for column in spec.list_columns
+            if column.split("__", 1)[0] not in known_fields
+        )
+
+    assert not missing
