@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 
 from untaped_awx.application.ports import Catalog, FkResolver, ResourceClient
 from untaped_awx.application.save_resource import SaveResource
@@ -23,33 +24,36 @@ class SaveResources:
         all_kinds: bool = False,
         kind: str | None = None,
         filters: dict[str, str] | None = None,
-    ) -> list[SaveOutcome]:
+    ) -> Iterator[SaveOutcome]:
         specs = self._target_specs(all_kinds=all_kinds, kind=kind)
-        outcomes: list[SaveOutcome] = []
+        return self._save_specs(specs, filters=filters or {})
+
+    def _save_specs(
+        self,
+        specs: list[ResourceSpec],
+        *,
+        filters: dict[str, str],
+    ) -> Iterator[SaveOutcome]:
         for spec in specs:
             if spec.fidelity == "read_only":
-                outcomes.append(
-                    SaveOutcome(
-                        kind=spec.kind,
-                        action="skipped",
-                        detail="not roundtrippable in v0",
-                    )
+                yield SaveOutcome(
+                    kind=spec.kind,
+                    action="skipped",
+                    detail="not roundtrippable in v0",
                 )
                 continue
-            incompatible = _filter_field_not_on_spec(filters or {}, spec)
+            incompatible = _filter_field_not_on_spec(filters, spec)
             if incompatible is not None:
-                outcomes.append(
-                    SaveOutcome(
-                        kind=spec.kind,
-                        action="skipped",
-                        detail=f"filter field {incompatible!r} not on this kind",
-                    )
+                yield SaveOutcome(
+                    kind=spec.kind,
+                    action="skipped",
+                    detail=f"filter field {incompatible!r} not on this kind",
                 )
                 continue
             records = self._save_one.find_all(spec, params=filters or None)
             for record in records:
                 resource = self._save_one.from_record(spec, record)
-                outcomes.append(
+                yield (
                     SaveOutcome(
                         kind=spec.kind,
                         name=resource.metadata.name,
@@ -59,7 +63,6 @@ class SaveResources:
                         header_comment=(spec.fidelity_note if spec.fidelity != "full" else None),
                     )
                 )
-        return outcomes
 
     def _target_specs(self, *, all_kinds: bool, kind: str | None) -> list[ResourceSpec]:
         if all_kinds:

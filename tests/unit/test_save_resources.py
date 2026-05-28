@@ -112,7 +112,7 @@ def test_save_resources_resolves_cli_name_and_generates_safe_full_identity_filen
         cli_names={"job-templates": "JobTemplate"},
     )
 
-    outcomes = use(kind="job-templates")
+    outcomes = list(use(kind="job-templates"))
 
     assert client.list_calls == [("JobTemplate", None)]
     assert len(outcomes) == 1
@@ -136,7 +136,7 @@ def test_save_resources_resolves_domain_kind() -> None:
         names={("Organization", 1): "Default"},
     )
 
-    outcomes = use(kind="JobTemplate")
+    outcomes = list(use(kind="JobTemplate"))
 
     assert client.list_calls == [("JobTemplate", None)]
     assert [outcome.filename for outcome in outcomes] == ["JobTemplate__Default__deploy.yml"]
@@ -153,7 +153,7 @@ def test_save_resources_skips_read_only_kinds_and_preserves_order() -> None:
         names={("Organization", 1): "Default"},
     )
 
-    outcomes = use(all_kinds=True)
+    outcomes = list(use(all_kinds=True))
 
     assert client.list_calls == [("JobTemplate", None)]
     assert [(outcome.kind, outcome.action, outcome.detail) for outcome in outcomes] == [
@@ -174,7 +174,7 @@ def test_save_resources_skips_kinds_with_incompatible_filters() -> None:
         names={("Organization", 1): "Default"},
     )
 
-    outcomes = use(all_kinds=True, filters={"organization__name": "Default"})
+    outcomes = list(use(all_kinds=True, filters={"organization__name": "Default"}))
 
     assert client.list_calls == [("JobTemplate", {"organization__name": "Default"})]
     assert [(outcome.kind, outcome.action, outcome.detail) for outcome in outcomes] == [
@@ -201,7 +201,7 @@ def test_save_resources_accepts_practical_list_filters(filters: dict[str, str]) 
         names={("Organization", 1): "Default"},
     )
 
-    outcomes = use(kind="JobTemplate", filters=filters)
+    outcomes = list(use(kind="JobTemplate", filters=filters))
 
     assert client.list_calls == [("JobTemplate", filters)]
     assert [(outcome.kind, outcome.action) for outcome in outcomes] == [("JobTemplate", "saved")]
@@ -228,6 +228,6 @@ def test_save_resources_filename_includes_parent_identity() -> None:
         specs=[SCHEDULE_SPEC],
     )
 
-    [outcome] = use(kind="Schedule")
+    [outcome] = list(use(kind="Schedule"))
 
     assert outcome.filename == "Schedule__JobTemplate__Default__deploy__nightly.yml"

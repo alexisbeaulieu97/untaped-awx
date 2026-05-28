@@ -50,13 +50,13 @@ def run_save_batch(
     print_paths: bool,
 ) -> None:
     """Bulk-save resources to disk and write the requested stdout shape."""
-    out_dir = out_dir.expanduser()
-    out_dir.mkdir(parents=True, exist_ok=True)
     outcomes = SaveResources(ctx.repo, ctx.fk, ctx.catalog)(
         all_kinds=all_kinds,
         kind=kind,
         filters=filters,
     )
+    out_dir = out_dir.expanduser()
+    out_dir.mkdir(parents=True, exist_ok=True)
     for outcome in outcomes:
         if outcome.action == "skipped":
             typer.echo(f"skipping {outcome.kind}: {outcome.detail}", err=True)
