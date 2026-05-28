@@ -8,14 +8,12 @@ import typer
 from untaped import (
     ColumnsOption,
     FormatOption,
-    format_output,
     report_errors,
 )
 
-from untaped_awx.application import SaveResource
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._save_runner import run_save_one
 from untaped_awx.infrastructure.spec import AwxResourceSpec
-from untaped_awx.infrastructure.yaml_io import dump_resource, write_resource
 
 
 def _add_save(app: typer.Typer, spec: AwxResourceSpec) -> None:
@@ -59,21 +57,12 @@ def _add_save(app: typer.Typer, spec: AwxResourceSpec) -> None:
                 inventory=inventory,
                 inventory_organization=inventory_organization,
             )
-            resource = SaveResource(ctx.repo, ctx.fk)(spec, name=name, scope=scope)
-        comment = spec.fidelity_note if spec.fidelity != "full" else None
-        if comment:
-            typer.echo(f"{spec.fidelity} save: {comment}", err=True)
-        if output:
-            write_resource(output, resource, header_comment=comment)
-            return
-        if fmt == "yaml":
-            # Bypass format_output: apply's read_resources rejects
-            # list-wrapped docs.
-            typer.echo(dump_resource(resource, header_comment=comment))
-            return
-        # ``exclude_none=True`` keeps json/raw's projected fields in
-        # sync with yaml (which goes through ``dump_resource``'s
-        # ``exclude_none`` path), so the same envelope renders the same
-        # field set across formats.
-        envelope = resource.model_dump(exclude_none=True)
-        typer.echo(format_output([envelope], fmt=fmt, columns=columns))
+            run_save_one(
+                ctx,
+                spec,
+                name=name,
+                scope=scope,
+                output=output,
+                fmt=fmt,
+                columns=columns,
+            )

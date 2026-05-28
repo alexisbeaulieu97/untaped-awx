@@ -15,6 +15,7 @@ from untaped_awx.application.ping import Ping
 from untaped_awx.application.ports import AwxPingService
 from untaped_awx.application.run_action import RunAction
 from untaped_awx.application.save_resource import SaveResource
+from untaped_awx.application.save_resources import SaveResources
 from untaped_awx.application.stream_job_events import StreamJobEvents
 from untaped_awx.application.tail_job_logs import TailJobLogs
 from untaped_awx.application.watch_job import WatchJob
@@ -35,6 +36,7 @@ __all__ = [
     "Ping",
     "RunAction",
     "SaveResource",
+    "SaveResources",
     "StreamJobEvents",
     "TailJobLogs",
     "WatchJob",
