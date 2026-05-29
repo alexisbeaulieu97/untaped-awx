@@ -23,6 +23,7 @@ from untaped import (
 
 from untaped_awx.application import ListWorkflowNodes
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli.options import OrganizationOption
 from untaped_awx.domain import WorkflowNode, WorkflowNodeType
 from untaped_awx.infrastructure.specs.workflow import WORKFLOW_JOB_TEMPLATE_SPEC
 
@@ -55,15 +56,7 @@ def register_nodes_command(parent: typer.Typer) -> None:
                 "exit; other roots still emit their rows."
             ),
         ),
-        organization: str | None = typer.Option(
-            None,
-            "--organization",
-            "-o",
-            help=(
-                "Organization scope for name lookup. Falls back to "
-                "``awx.default_organization`` from the active profile."
-            ),
-        ),
+        organization: OrganizationOption = None,
         recursive: bool = typer.Option(
             False,
             "--recursive",

@@ -28,6 +28,11 @@ from untaped import ProfileOverrideOption, read_identifiers, report_errors, reso
 
 from untaped_awx.application import GetResource, ManageMembership
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli.options import (
+    InventoryOption,
+    InventoryOrganizationOption,
+    OrganizationOption,
+)
 from untaped_awx.domain import FkRef
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
@@ -75,21 +80,9 @@ def _add_membership_verb(
             "--stdin",
             help="Read member names or ids from stdin (one per line).",
         ),
-        organization: str | None = typer.Option(
-            None,
-            "--organization",
-            help="Scope the parent lookup to an organization.",
-        ),
-        inventory: str | None = typer.Option(
-            None,
-            "--inventory",
-            help="Scope the parent lookup to an inventory (inventory-child kinds only).",
-        ),
-        inventory_organization: str | None = typer.Option(
-            None,
-            "--inventory-organization",
-            help="Disambiguate same-named inventories across organizations.",
-        ),
+        organization: OrganizationOption = None,
+        inventory: InventoryOption = None,
+        inventory_organization: InventoryOrganizationOption = None,
         profile: ProfileOverrideOption = None,
     ) -> None:
         any_failed = False

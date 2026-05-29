@@ -85,17 +85,17 @@ untaped awx <kind> list [--search <q>] [--filter KEY=VALUE]... [--limit N]
                         [--stdin] [--with-names]
                         [--format json|yaml|table|raw] [--columns ...]
 
-untaped awx <kind> get <name>... [--stdin] [--organization <org>]
+untaped awx <kind> get <name>... [--stdin] [--organization <org>|--org <org>]
                                  [--with-names]
                                  [--format yaml|json|table|raw] [--columns ...]
 
-untaped awx <kind> save <name> [--out FILE] [--organization <org>]
+untaped awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
 
 untaped awx <kind> apply FILE [--yes] [--fail-fast]
                          [--format json|yaml|table|raw] [--columns ...]
 
 untaped awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
-                                      [--organization <org>] [--by-name]
+                                      [--organization <org>|--org <org>] [--by-name]
                                       [--format json|yaml|table|raw] [--columns ...]
 # Exactly one of {positional names, --stdin} must be supplied.
 ```
@@ -218,7 +218,7 @@ intentionally do not expose `delete`.
 
 ```bash
 # Single delete, interactive (prompts before calling DELETE).
-untaped awx job-templates delete deploy --organization Engineering
+untaped awx job-templates delete deploy --org Engineering
 
 # Skip the prompt (required for scripts / pipelines).
 untaped awx job-templates delete 42 --yes
@@ -236,8 +236,10 @@ untaped awx job-templates list -f raw \
 
 Identifier semantics match `get`/`save`: numeric ids are looked up by
 id, anything else by name within the resolved scope (`--organization`
-for org-scoped kinds; `--inventory` for hosts/groups). `--by-name`
-forces the name path for resources whose name is all digits.
+/ `--org` for org-scoped kinds; `--inventory` for hosts/groups, with
+`--inventory-organization` / `--inventory-org` to disambiguate
+same-named inventories across orgs). `--by-name` forces the name path
+for resources whose name is all digits.
 
 Per-id errors (resolve-time 404, delete-time 409 "in use", permission
 denied, …) emit `error: <ident>: <message>` on stderr; successful
@@ -259,7 +261,7 @@ untaped awx job-templates launch <name>... [--stdin]
     [--scm-branch <b>] [--job-tag <t>]... [--skip-tag <t>]...
     [--verbosity 0..4] [--diff-mode/--no-diff-mode] [--job-type run|check]
     [--wait | --monitor]
-    [--organization <org>]
+    [--organization <org>|--org <org>]
 ```
 
 Names like `--inventory` and `--credential` resolve to ids using the
@@ -272,7 +274,7 @@ loudly rather than silently dropped.
 ### `update` (projects only)
 
 ```bash
-untaped awx projects update <name> [--wait]
+untaped awx projects update <name> [--organization <org>|--org <org>] [--wait]
 ```
 
 Triggers an SCM sync on the project.
@@ -424,7 +426,7 @@ shows *what* runs, not the DAG structure.
 ```bash
 # Top-level nodes only. Default columns: id,name,type,depth. Add
 # repeated ``--columns`` flags if you want the DAG label.
-untaped awx workflow-templates nodes <name|id> [--organization ORG] \
+untaped awx workflow-templates nodes <name|id> [--organization ORG|--org ORG] \
   --columns id --columns identifier --columns name --columns type --columns depth
 
 # Flatten sub-workflows. ``depth`` tags each row's distance from the

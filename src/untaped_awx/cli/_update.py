@@ -13,6 +13,7 @@ from untaped import (
 
 from untaped_awx.application import RunAction, WatchJob
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli.options import OrganizationOption
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
@@ -23,9 +24,7 @@ def _add_update(app: typer.Typer, spec: AwxResourceSpec) -> None:
     @app.command("update", no_args_is_help=True)
     def update_command(
         name: str = typer.Argument(..., help=f"{spec.kind} name."),
-        organization: str | None = typer.Option(
-            None, "--organization", help="Scope to organization."
-        ),
+        organization: OrganizationOption = None,
         wait: bool = typer.Option(False, "--wait", help="Block until terminal."),
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,

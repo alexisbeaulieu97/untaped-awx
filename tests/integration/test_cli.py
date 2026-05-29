@@ -966,6 +966,31 @@ def test_get_with_scope_resolves_unambiguously(fake_aap: Any) -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_get_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
+    """``--org`` is the ergonomic alias for the common org-scope lookup."""
+    fake_aap.seed("organizations", id=1, name="Org-A")
+    fake_aap.seed("organizations", id=2, name="Org-B")
+    fake_aap.seed("job_templates", id=10, name="deploy", organization=1, organization_name="Org-A")
+    fake_aap.seed("job_templates", id=11, name="deploy", organization=2, organization_name="Org-B")
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "job-templates",
+            "get",
+            "deploy",
+            "--org",
+            "Org-B",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "11"
+
+
 def test_launch_supports_format_json(seeded_default_org: Any) -> None:
     """The pipeline contract: launch must honour --format/--columns
     instead of forcing yaml output."""
@@ -978,6 +1003,23 @@ def test_launch_supports_format_json(seeded_default_org: Any) -> None:
     assert result.exit_code == 0, result.output
     parsed = _json.loads(result.stdout)
     assert isinstance(parsed, list) and parsed, parsed
+
+
+def test_launch_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
+    fake_aap.seed("organizations", id=1, name="Org-A")
+    fake_aap.seed("organizations", id=2, name="Org-B")
+    fake_aap.seed("job_templates", id=10, name="deploy", organization=1, organization_name="Org-A")
+    fake_aap.seed("job_templates", id=11, name="deploy", organization=2, organization_name="Org-B")
+
+    result = CliRunner().invoke(
+        app,
+        ["job-templates", "launch", "deploy", "--org", "Org-B", "--format", "raw"],
+    )
+
+    assert result.exit_code == 0, result.output
+    launches = [c for c in fake_aap.actions_called if c[2] == "launch"]
+    assert len(launches) == 1
+    assert launches[0][1] == 11
 
 
 def test_workflow_launch_rejects_unsupported_flags(seeded_default_org: Any) -> None:
@@ -2080,6 +2122,23 @@ def _flag_in_help(flag: str, help_text: str) -> bool:
     future ``--credentials`` (plural).
     """
     return re.search(rf"{re.escape(flag)}\b", help_text) is not None
+
+
+def test_scope_aliases_are_advertised_on_generated_commands() -> None:
+    runner = CliRunner()
+
+    org_scoped_commands = [
+        ["job-templates", "get", "--help"],
+        ["job-templates", "list", "--help"],
+        ["job-templates", "save", "--help"],
+        ["job-templates", "delete", "--help"],
+        ["projects", "update", "--help"],
+    ]
+    for args in org_scoped_commands:
+        result = runner.invoke(app, args)
+        assert result.exit_code == 0, result.output
+        assert _flag_in_help("--organization", result.output), args
+        assert _flag_in_help("--org", result.output), args
 
 
 def test_launch_help_narrows_flags_by_accepts() -> None:
