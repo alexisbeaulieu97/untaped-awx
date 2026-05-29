@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,6 +13,8 @@ from typer.testing import CliRunner
 from untaped_awx import app
 
 pytestmark = pytest.mark.integration
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _seed_org_and_root_workflow(fake: Any) -> None:
@@ -116,6 +119,42 @@ def _seed_nested(fake: Any) -> None:
             "workflow_job_template": {"id": 200, "name": "nightly-backups"},
         },
     )
+
+
+def test_nodes_docs_columns_example_is_executable(fake_aap: Any) -> None:
+    """The docs must show the repeatable ``--columns`` contract."""
+    docs = (_REPO_ROOT / "docs" / "awx.md").read_text()
+    assert "--columns id,identifier,name,type,depth" not in docs
+    assert "--columns id --columns identifier --columns name --columns type --columns depth" in docs
+
+    _seed_org_and_root_workflow(fake_aap)
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-templates",
+            "nodes",
+            "--by-id",
+            "100",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+            "--columns",
+            "identifier",
+            "--columns",
+            "name",
+            "--columns",
+            "type",
+            "--columns",
+            "depth",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    rows = sorted(result.stdout.strip().splitlines())
+    assert rows == [
+        "1\tpre-flight\tsmoke-test\tjob_template\t0",
+        "2\trollup\tnightly-backups\tworkflow_job_template\t0",
+    ]
 
 
 def test_nodes_lists_top_level_by_id(fake_aap: Any) -> None:
