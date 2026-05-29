@@ -97,7 +97,7 @@ def test_hosts_get_by_id(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
     result = CliRunner().invoke(
         app,
-        ["hosts", "get", "101", "--format", "json", "--columns", "name"],
+        ["hosts", "get", "--by-id", "101", "--format", "json", "--columns", "name"],
     )
     assert result.exit_code == 0, result.output
     assert "web-01" in result.stdout
@@ -107,7 +107,7 @@ def test_hosts_get_by_stdin(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
     result = CliRunner().invoke(
         app,
-        ["hosts", "get", "--stdin", "--format", "raw", "--columns", "name"],
+        ["hosts", "get", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="101\n102\n",
     )
     assert result.exit_code == 0, result.output

@@ -12,8 +12,8 @@ Pipeline shape::
       | untaped awx groups hosts add prod-web --stdin
 
 Members are resolved per identifier via
-:meth:`untaped_awx.application.GetResource.by_identifier` (numeric →
-id lookup, otherwise name lookup scoped to the parent's inventory).
+:meth:`untaped_awx.application.GetResource.by_identifier` (names by
+default, ids when ``--by-id`` is passed).
 AWX's associate/disassociate POSTs are idempotent (re-adding or
 re-removing returns 204), so ``add`` and ``remove`` are safe to run
 repeatedly.
@@ -29,6 +29,7 @@ from untaped import ProfileOverrideOption, read_identifiers, report_errors, reso
 from untaped_awx.application import GetResource, ManageMembership
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli.options import (
+    ByIdOption,
     InventoryOption,
     InventoryOrganizationOption,
     OrganizationOption,
@@ -71,15 +72,14 @@ def _add_membership_verb(
 
     @sub.command(verb, no_args_is_help=True, help=help_text)
     def cmd(
-        parent: str = typer.Argument(..., help=f"{spec.kind} name or numeric id."),
-        members: list[str] | None = typer.Argument(
-            None, help=f"{ref.kind} name(s) or numeric id(s)."
-        ),
+        parent: str = typer.Argument(..., help=f"{spec.kind} name."),
+        members: list[str] | None = typer.Argument(None, help=f"{ref.kind} name(s)."),
         stdin: bool = typer.Option(
             False,
             "--stdin",
-            help="Read member names or ids from stdin (one per line).",
+            help="Read member names from stdin (one per line).",
         ),
+        by_id: ByIdOption = False,
         organization: OrganizationOption = None,
         inventory: InventoryOption = None,
         inventory_organization: InventoryOrganizationOption = None,
@@ -96,7 +96,7 @@ def _add_membership_verb(
                 inventory_organization=inventory_organization,
             )
             getter = GetResource(ctx.repo)
-            parent_rec = getter.by_identifier(spec, parent, scope=parent_scope)
+            parent_rec = getter.by_identifier(spec, parent, scope=parent_scope, by_id=by_id)
             parent_id = int(parent_rec["id"])
 
             assert ref.kind is not None  # guarded by register_membership_subapp
@@ -104,7 +104,9 @@ def _add_membership_verb(
             member_scope = _member_scope(parent_rec, ref)
             resolved_ids, any_failed = resolve_each(
                 member_ids_input,
-                lambda n: int(getter.by_identifier(member_spec, n, scope=member_scope)["id"]),
+                lambda n: int(
+                    getter.by_identifier(member_spec, n, scope=member_scope, by_id=by_id)["id"]
+                ),
             )
 
             ManageMembership(ctx.repo)(
@@ -125,7 +127,7 @@ def _member_scope(parent_rec: dict[str, Any], ref: FkRef) -> dict[str, str] | No
     members live in the same inventory as the parent and we pull both
     ``name`` and ``organization_name`` out of ``summary_fields.inventory``
     so cross-org disambiguation (same-named inventories across orgs)
-    matches the convention ``scope_for_spec`` uses. Numeric ids bypass
+    matches the convention ``scope_for_spec`` uses. ``--by-id`` bypasses
     name lookup entirely so a missing scope only matters when the user
     pipes names.
     """

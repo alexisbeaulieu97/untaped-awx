@@ -6,6 +6,14 @@ from typing import Annotated
 
 import typer
 
+ByIdOption = Annotated[
+    bool,
+    typer.Option(
+        "--by-id",
+        help="Look up identifiers as AWX numeric ids instead of names.",
+    ),
+]
+
 OrganizationOption = Annotated[
     str | None,
     typer.Option("--organization", "--org", help="Scope to organization."),
@@ -16,7 +24,7 @@ OrganizationLookupOption = Annotated[
     typer.Option(
         "--organization",
         "--org",
-        help="Scope name lookup to organization (ignored for numeric ids).",
+        help="Scope name lookup to organization.",
     ),
 ]
 
@@ -25,7 +33,7 @@ OrganizationStdinLookupOption = Annotated[
     typer.Option(
         "--organization",
         "--org",
-        help="Scope --stdin name lookups to an organization (ignored for numeric ids).",
+        help="Scope --stdin name lookups to an organization.",
     ),
 ]
 
@@ -65,6 +73,7 @@ InventoryOrganizationOption = Annotated[
 
 
 __all__ = [
+    "ByIdOption",
     "InventoryLookupOption",
     "InventoryOption",
     "InventoryOrganizationOption",

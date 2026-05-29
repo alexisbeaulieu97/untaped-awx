@@ -82,11 +82,11 @@ the sub-apps above.
 
 ```bash
 untaped awx <kind> list [--search <q>] [--filter KEY=VALUE]... [--limit N]
-                        [--stdin] [--with-names]
+                        [--stdin] [--by-id] [--with-names]
                         [--format json|yaml|table|raw] [--columns ...]
 
 untaped awx <kind> get <name>... [--stdin] [--organization <org>|--org <org>]
-                                 [--with-names]
+                                 [--by-id] [--with-names]
                                  [--format yaml|json|table|raw] [--columns ...]
 
 untaped awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
@@ -95,7 +95,7 @@ untaped awx <kind> apply FILE [--yes] [--fail-fast]
                          [--format json|yaml|table|raw] [--columns ...]
 
 untaped awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
-                                      [--organization <org>|--org <org>] [--by-name]
+                                      [--organization <org>|--org <org>] [--by-id]
                                       [--format json|yaml|table|raw] [--columns ...]
 # Exactly one of {positional names, --stdin} must be supplied.
 ```
@@ -119,19 +119,20 @@ which is what the FK-piping shape relies on:
 # Human-readable list — names instead of ids
 untaped awx job-templates list --with-names
 
-# Pipe-friendly: ids feed the next `get --stdin`
+# Pipe-friendly: ids feed the next explicit id lookup.
 untaped awx job-templates list --columns project --format raw \
   | sort -u \
-  | untaped awx projects get --stdin --columns name
+  | untaped awx projects get --stdin --by-id --columns name
 ```
 
 `--stdin` flips `list` into a consumer: it reads newline-separated
-names or numeric ids from stdin and renders only those records using
-the tabular columns view. Same identifier semantics as `get --stdin`
-(digits → id, otherwise name), but the output is `list`'s columns
-table rather than `get`'s per-record yaml. Cannot be combined with
-`--search`, `--filter`, or `--limit` — those are server-side filtering
-knobs and identifier lookup is a different mode.
+names from stdin and renders only those records using the tabular
+columns view. Same identifier semantics as `get --stdin`: names are
+the default, and `--by-id` makes the whole batch resolve as AWX ids.
+The output is `list`'s columns table rather than `get`'s per-record
+yaml. Cannot be combined with `--search`, `--filter`, or `--limit` —
+those are server-side filtering knobs and identifier lookup is a
+different mode.
 
 ```bash
 # Curated tabular view across a known set of templates
@@ -221,28 +222,26 @@ intentionally do not expose `delete`.
 untaped awx job-templates delete deploy --org Engineering
 
 # Skip the prompt (required for scripts / pipelines).
-untaped awx job-templates delete 42 --yes
+untaped awx job-templates delete deploy --yes
 
 # Batch from stdin — refuses to consume stdin without --yes or --dry-run.
-untaped awx job-templates list -f raw \
-  | grep '^staging-' \
-  | untaped awx job-templates delete --stdin --yes
+untaped awx job-templates list --filter name__startswith=staging- --columns id -f raw \
+  | untaped awx job-templates delete --stdin --by-id --yes
 
 # Preview first: resolves every id and prints what would be deleted.
-untaped awx job-templates list -f raw \
-  | grep '^staging-' \
-  | untaped awx job-templates delete --stdin --dry-run
+untaped awx job-templates list --filter name__startswith=staging- --columns id -f raw \
+  | untaped awx job-templates delete --stdin --by-id --dry-run
 ```
 
-Identifier semantics match `get`/`save`: numeric ids are looked up by
-id, anything else by name within the resolved scope (`--organization`
-/ `--org` for org-scoped kinds; `--inventory` for hosts/groups, with
+Identifier semantics match `get`/`save`: identifiers are names by
+default, including all-digit names. Pass `--by-id` to resolve every
+identifier as an AWX numeric id. Scope flags (`--organization` /
+`--org` for org-scoped kinds; `--inventory` for hosts/groups, with
 `--inventory-organization` / `--inventory-org` to disambiguate
-same-named inventories across orgs). `--by-name` forces the name path
-for resources whose name is all digits.
+same-named inventories across orgs) apply to name lookup only.
 
-Per-id errors (resolve-time 404, delete-time 409 "in use", permission
-denied, …) emit `error: <ident>: <message>` on stderr; successful
+Per-identifier errors (resolve-time 404, delete-time 409 "in use",
+permission denied, …) emit `error: <ident>: <message>` on stderr; successful
 deletes emit a row whose first key is `id` so `--format raw` returns
 the deleted ids straight back into another pipeline. Exit code is 1 if
 any identifier failed to resolve or delete, 0 otherwise.
@@ -256,6 +255,7 @@ a template before deleting the template).
 
 ```bash
 untaped awx job-templates launch <name>... [--stdin]
+    [--by-id]
     [--extra-vars KEY=VAL]... [--limit <pattern>]
     [--inventory <name>] [--credential <name>]...
     [--scm-branch <b>] [--job-tag <t>]... [--skip-tag <t>]...
@@ -274,7 +274,7 @@ loudly rather than silently dropped.
 ### `update` (projects only)
 
 ```bash
-untaped awx projects update <name> [--organization <org>|--org <org>] [--wait]
+untaped awx projects update <name> [--by-id] [--organization <org>|--org <org>] [--wait]
 ```
 
 Triggers an SCM sync on the project.
@@ -426,30 +426,30 @@ shows *what* runs, not the DAG structure.
 ```bash
 # Top-level nodes only. Default columns: id,name,type,depth. Add
 # repeated ``--columns`` flags if you want the DAG label.
-untaped awx workflow-templates nodes <name|id> [--organization ORG|--org ORG] \
+untaped awx workflow-templates nodes <name> [--by-id] [--organization ORG|--org ORG] \
   --columns id --columns identifier --columns name --columns type --columns depth
 
 # Flatten sub-workflows. ``depth`` tags each row's distance from the
 # root (0 = root's own nodes, 1 = one sub-workflow deep, …).
-untaped awx workflow-templates nodes <name|id> --recursive
-untaped awx workflow-templates nodes <name|id> --recursive --depth 2
+untaped awx workflow-templates nodes <name> --recursive
+untaped awx workflow-templates nodes <name> --recursive --depth 2
 
 # ``--depth N`` for N>0 implies ``--recursive``; ``--depth 0`` means
 # "only the root" (the default when neither flag is passed).
-untaped awx workflow-templates nodes <name|id> --depth 1
+untaped awx workflow-templates nodes <name> --depth 1
 
 # Narrow the output to one template-type discriminator. Traversal
 # still descends into every workflow node, so ``--type job_template``
 # combined with ``--recursive`` shows every job template anywhere in
 # the workflow tree.
-untaped awx workflow-templates nodes <name|id> --recursive --type job_template
-untaped awx workflow-templates nodes <name|id> --type workflow_job_template
+untaped awx workflow-templates nodes <name> --recursive --type job_template
+untaped awx workflow-templates nodes <name> --type workflow_job_template
 
 # Pipe multiple workflow roots in via stdin. The node trees are
 # concatenated in input order (one BFS per root). Pairs cleanly with
 # ``list --filter ... -f raw -c id`` to fan out across an org.
 untaped awx workflow-templates list --filter organization__name=Default -f raw -c id \
-  | untaped awx workflow-templates nodes --stdin --recursive --type job_template -f raw -c name \
+  | untaped awx workflow-templates nodes --stdin --by-id --recursive --type job_template -f raw -c name \
   | grep '^t_' | sort -u
 
 # Server-side filter: ``--filter KEY=VALUE`` (repeatable, Django-style,
@@ -459,7 +459,7 @@ untaped awx workflow-templates list --filter organization__name=Default -f raw -
 untaped awx workflow-templates list \
     --filter organization__name=Default -f raw -c id -c name \
   | while IFS=$'\t' read wid wname; do
-      untaped awx workflow-templates nodes "$wid" \
+      untaped awx workflow-templates nodes "$wid" --by-id \
           --filter "unified_job_template__name__in=t_foo,t_bar" \
           -f raw -c id \
         | grep -q . && echo "$wname"
@@ -472,21 +472,21 @@ untaped awx workflow-templates list \
 # self-describing.
 untaped awx workflow-templates list \
     --filter organization__name=Default -f raw -c id \
-  | untaped awx workflow-templates nodes --stdin --recursive \
+  | untaped awx workflow-templates nodes --stdin --by-id --recursive \
       --type job_template -f raw \
       -c summary_fields.workflow_job_template.name -c name \
   | sort -u
 ```
 
-Numeric identifiers (`nodes 100`) skip the name lookup; names follow
-the same org-scope rules as `workflow-templates get`. Recursion is
+Names follow the same org-scope rules as `workflow-templates get`;
+pass `--by-id` when every root identifier is an AWX id. Recursion is
 cycle-guarded by workflow id — a workflow that re-enters itself emits
 a `warning: cycle: workflow <id> already visited; skipping` line to
 stderr and is skipped on the second visit. Nodes whose referenced
 template has been deleted (`unified_job_template: null`) still appear
 with `name` and `type` empty. With `--stdin`, a per-root failure
-(unknown workflow, lookup error) emits `warning: <id>: <exc>` to
-stderr and forces a non-zero exit; valid roots still emit their rows.
+(unknown workflow, lookup error) emits `warning: <identifier>: <exc>`
+to stderr and forces a non-zero exit; valid roots still emit their rows.
 With `--filter`, the filter is applied server-side on each
 `workflow_nodes` GET; combined with `--recursive` it applies at every
 BFS level, so a filter that excludes sub-workflow rows will prune

@@ -76,7 +76,7 @@ def test_groups_list_returns_seeded_records(fake_aap: Any) -> None:
 def test_groups_get_by_id(fake_aap: Any) -> None:
     _seed_groups(fake_aap)
     result = CliRunner().invoke(
-        app, ["groups", "get", "200", "--format", "raw", "--columns", "name"]
+        app, ["groups", "get", "--by-id", "200", "--format", "raw", "--columns", "name"]
     )
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == "web-servers"
@@ -607,14 +607,13 @@ def test_groups_hosts_add_disambiguates_parent_with_inventory_flag(fake_aap: Any
     assert fake_aap.memberships[("groups", 200, "hosts")] == set()
 
 
-def test_groups_hosts_add_resolves_by_id_skipping_scope(fake_aap: Any) -> None:
-    """Numeric ids bypass name lookup so the scope (inventory) doesn't
-    matter — the natural pipeline shape when piping FK columns."""
+def test_groups_hosts_add_by_id_resolves_parent_and_members_as_ids(fake_aap: Any) -> None:
+    """--by-id resolves the parent and every member as AWX ids."""
     _seed_groups(fake_aap)
     _seed_two_hosts(fake_aap)
     result = CliRunner().invoke(
         app,
-        ["groups", "hosts", "add", "web-servers", "--stdin"],
+        ["groups", "hosts", "add", "200", "--stdin", "--by-id"],
         input="101\n102\n",
     )
     assert result.exit_code == 0, result.output

@@ -125,6 +125,7 @@ def test_nodes_lists_top_level_by_id(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--format",
             "raw",
@@ -162,6 +163,71 @@ def test_nodes_resolves_workflow_by_name(fake_aap: Any) -> None:
             "id",
         ],
     )
+    assert result.exit_code == 0, result.output
+    ids = sorted(result.stdout.strip().splitlines(), key=int)
+    assert ids == ["1", "2"]
+
+
+def test_nodes_numeric_name_is_default(fake_aap: Any) -> None:
+    _seed_org_and_root_workflow(fake_aap)
+    fake_aap.seed(
+        "workflow_job_templates",
+        id=300,
+        name="123",
+        organization=1,
+        organization_name="Default",
+    )
+    fake_aap.seed(
+        "workflow_nodes",
+        id=3,
+        identifier="numeric-name",
+        workflow_job_template=300,
+        unified_job_template=10,
+        summary_fields={
+            "unified_job_template": {
+                "id": 10,
+                "name": "smoke-test",
+                "unified_job_type": "job",
+            },
+            "workflow_job_template": {"id": 300, "name": "123"},
+        },
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-templates",
+            "nodes",
+            "123",
+            "--org",
+            "Default",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "3"
+
+
+def test_nodes_by_id_uses_awx_id(fake_aap: Any) -> None:
+    _seed_org_and_root_workflow(fake_aap)
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-templates",
+            "nodes",
+            "--by-id",
+            "100",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
+    )
+
     assert result.exit_code == 0, result.output
     ids = sorted(result.stdout.strip().splitlines(), key=int)
     assert ids == ["1", "2"]
@@ -236,6 +302,7 @@ def test_nodes_recursive_flattens_sub_workflow(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--format",
@@ -259,6 +326,7 @@ def test_nodes_depth_zero_returns_only_root(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--depth",
@@ -282,6 +350,7 @@ def test_nodes_depth_one_caps_nested(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--depth",
             "1",
@@ -307,6 +376,7 @@ def test_nodes_type_filter_keeps_only_matching_kind(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--type",
@@ -336,6 +406,7 @@ def test_nodes_type_filter_keeps_only_workflows(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--type",
@@ -402,6 +473,7 @@ def test_nodes_cycle_emits_stderr_warning(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--format",
@@ -442,6 +514,7 @@ def test_nodes_accepts_multiple_positional_roots(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "200",
             "--format",
@@ -469,6 +542,7 @@ def test_nodes_stdin_reads_multiple_roots_and_concatenates(fake_aap: Any) -> Non
             "workflow-templates",
             "nodes",
             "--stdin",
+            "--by-id",
             "--format",
             "raw",
             "--columns",
@@ -514,6 +588,7 @@ def test_nodes_positional_partial_failure_warns_and_exits_nonzero(
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "does-not-exist",
             "--format",
@@ -537,6 +612,7 @@ def test_nodes_stdin_partial_failure_warns_and_exits_nonzero(fake_aap: Any) -> N
             "workflow-templates",
             "nodes",
             "--stdin",
+            "--by-id",
             "--format",
             "raw",
             "--columns",
@@ -558,6 +634,7 @@ def test_nodes_filter_narrows_results(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--filter",
             "unified_job_template=10",
@@ -581,6 +658,7 @@ def test_nodes_filter_repeatable(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--filter",
             "unified_job_template__in=10,200",
@@ -609,6 +687,7 @@ def test_nodes_filter_with_recursive_applies_at_every_level(fake_aap: Any) -> No
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--filter",
@@ -639,6 +718,7 @@ def test_nodes_filter_with_recursive_prunes_sub_workflow_descent(
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--filter",
@@ -666,6 +746,7 @@ def test_nodes_filter_composes_with_depth_cap(fake_aap: Any) -> None:
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--depth",
             "1",
@@ -691,6 +772,7 @@ def test_nodes_projects_summary_fields_parent_workflow_name(fake_aap: Any) -> No
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--format",
             "raw",
@@ -721,6 +803,7 @@ def test_nodes_json_explicit_summary_fields_column_projects_correctly(
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--format",
             "json",
@@ -747,6 +830,7 @@ def test_nodes_recursive_summary_fields_carries_per_root_name(fake_aap: Any) -> 
         [
             "workflow-templates",
             "nodes",
+            "--by-id",
             "100",
             "--recursive",
             "--format",
@@ -785,6 +869,7 @@ def test_nodes_stdin_recursive_type_filter_end_to_end(fake_aap: Any) -> None:
             "workflow-templates",
             "nodes",
             "--stdin",
+            "--by-id",
             "--recursive",
             "--type",
             "job_template",

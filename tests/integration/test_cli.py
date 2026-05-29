@@ -483,11 +483,11 @@ def test_get_reads_names_from_stdin(seeded_default_org: Any) -> None:
     assert "beta" in result.stdout
 
 
-def test_get_accepts_numeric_id_positional(seeded_default_org: Any) -> None:
-    """Numeric identifiers must be looked up by id, not by name.
+def test_get_by_id_accepts_numeric_id_positional(seeded_default_org: Any) -> None:
+    """Explicit ``--by-id`` keeps the FK-piping id lookup path available.
 
     Lets users pipe FK columns straight into another resource's `get`:
-    `job-templates list --columns project --format raw | projects get --stdin`.
+    `job-templates list --columns project --format raw | projects get --stdin --by-id`.
     """
     seeded_default_org.seed(
         "projects",
@@ -498,7 +498,8 @@ def test_get_accepts_numeric_id_positional(seeded_default_org: Any) -> None:
         scm_type="git",
     )
     result = CliRunner().invoke(
-        app, ["projects", "get", "10", "--format", "raw", "--columns", "name"]
+        app,
+        ["projects", "get", "--by-id", "10", "--format", "raw", "--columns", "name"],
     )
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == "playbooks"
@@ -520,11 +521,8 @@ def test_get_treats_unicode_non_decimal_digit_as_name(seeded_default_org: Any) -
     assert "error" in output
 
 
-def test_get_by_name_forces_name_lookup_for_all_digit_names(seeded_default_org: Any) -> None:
-    """Resources whose AWX name happens to be all digits would otherwise
-    be unreachable: ``get 10`` always means id-10. ``--by-name`` is the
-    escape hatch — disables digit detection so the identifier is used as
-    a name lookup (scoped to ``--organization`` like any other name)."""
+def test_get_defaults_to_name_lookup_for_all_digit_names(seeded_default_org: Any) -> None:
+    """All-digit resource names are first-class: default lookup is by name."""
     # A project whose name is "10" — and a different project with id 10.
     seeded_default_org.seed(
         "projects",
@@ -542,21 +540,12 @@ def test_get_by_name_forces_name_lookup_for_all_digit_names(seeded_default_org: 
         organization_name="Default",
         scm_type="git",
     )
-    # Without --by-name: "10" is treated as id, returns playbooks.
-    default_result = CliRunner().invoke(
-        app, ["projects", "get", "10", "--format", "raw", "--columns", "name"]
-    )
-    assert default_result.exit_code == 0, default_result.output
-    assert default_result.stdout.strip() == "playbooks"
-
-    # With --by-name: "10" is treated as a name, returns the all-digit-named project.
-    by_name_result = CliRunner().invoke(
+    result = CliRunner().invoke(
         app,
         [
             "projects",
             "get",
             "10",
-            "--by-name",
             "--organization",
             "Default",
             "--format",
@@ -565,8 +554,8 @@ def test_get_by_name_forces_name_lookup_for_all_digit_names(seeded_default_org: 
             "id",
         ],
     )
-    assert by_name_result.exit_code == 0, by_name_result.output
-    assert by_name_result.stdout.strip() == "99"
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "99"
 
 
 def test_get_by_id_ignores_organization_scope(fake_aap: Any) -> None:
@@ -588,6 +577,7 @@ def test_get_by_id_ignores_organization_scope(fake_aap: Any) -> None:
         [
             "projects",
             "get",
+            "--by-id",
             "10",
             "--organization",
             "Org-A",  # wrong org, must be ignored
@@ -601,38 +591,66 @@ def test_get_by_id_ignores_organization_scope(fake_aap: Any) -> None:
     assert result.stdout.strip() == "playbooks"
 
 
-def test_get_reads_ids_from_stdin(seeded_default_org: Any) -> None:
-    """Pipeline shape: `job-templates list --columns project --format raw |
-    projects get --stdin` must look each entry up by id."""
+def test_get_stdin_defaults_to_name_lookup_for_all_lines(seeded_default_org: Any) -> None:
+    """Default stdin batches treat every line as a name, even all digits."""
     seeded_default_org.seed(
         "projects",
-        id=10,
-        name="playbooks",
+        id=99,
+        name="10",
         organization=1,
         organization_name="Default",
         scm_type="git",
     )
     seeded_default_org.seed(
         "projects",
-        id=11,
-        name="ops",
+        id=100,
+        name="11",
         organization=1,
         organization_name="Default",
         scm_type="git",
     )
     result = CliRunner().invoke(
         app,
-        ["projects", "get", "--stdin", "--format", "raw", "--columns", "name"],
+        [
+            "projects",
+            "get",
+            "--stdin",
+            "--organization",
+            "Default",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
         input="10\n11\n",
     )
     assert result.exit_code == 0, result.output
-    assert "playbooks" in result.stdout
-    assert "ops" in result.stdout
+    assert set(result.stdout.split()) == {"99", "100"}
 
 
-def test_get_mixes_names_and_ids(seeded_default_org: Any) -> None:
-    """A single batch can mix names and numeric ids — name entries still
-    honour the resolved organization scope."""
+def test_get_stdin_by_id_rejects_non_numeric_lines(seeded_default_org: Any) -> None:
+    """``--by-id`` is a batch mode: every line must be an id."""
+    seeded_default_org.seed(
+        "projects",
+        id=10,
+        name="playbooks",
+        organization=1,
+        organization_name="Default",
+        scm_type="git",
+    )
+    result = CliRunner().invoke(
+        app,
+        ["projects", "get", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
+        input="10\nops\n",
+    )
+    assert result.exit_code == 1
+    assert result.stdout.strip() == "playbooks"
+    assert "ops" in (result.stderr or result.output)
+    assert "numeric" in (result.stderr or result.output)
+
+
+def test_get_batches_default_to_all_names(seeded_default_org: Any) -> None:
+    """Default batches do not mix per-token modes; every identifier is a name."""
     seeded_default_org.seed(
         "projects",
         id=10,
@@ -643,8 +661,8 @@ def test_get_mixes_names_and_ids(seeded_default_org: Any) -> None:
     )
     seeded_default_org.seed(
         "projects",
-        id=11,
-        name="ops",
+        id=99,
+        name="11",
         organization=1,
         organization_name="Default",
         scm_type="git",
@@ -666,7 +684,7 @@ def test_get_mixes_names_and_ids(seeded_default_org: Any) -> None:
     )
     assert result.exit_code == 0, result.output
     assert "playbooks" in result.stdout
-    assert "ops" in result.stdout
+    assert "11" in result.stdout
 
 
 def test_get_by_missing_id_reports_error(seeded_default_org: Any) -> None:
@@ -682,7 +700,7 @@ def test_get_by_missing_id_reports_error(seeded_default_org: Any) -> None:
     )
     result = CliRunner().invoke(
         app,
-        ["projects", "get", "--stdin", "--format", "raw", "--columns", "name"],
+        ["projects", "get", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="10\n9999\n",
     )
     assert result.exit_code != 0
@@ -723,9 +741,8 @@ def test_list_reads_names_from_stdin(seeded_default_org: Any) -> None:
     assert "beta" in result.stdout
 
 
-def test_list_reads_ids_from_stdin(seeded_default_org: Any) -> None:
-    """Numeric identifiers piped into `list --stdin` use the id-lookup
-    path — mirrors the documented FK-piping shape into a tabular view."""
+def test_list_stdin_by_id_reads_ids(seeded_default_org: Any) -> None:
+    """``list --stdin --by-id`` keeps the id-piping shape explicit."""
     seeded_default_org.seed(
         "projects",
         id=10,
@@ -744,7 +761,7 @@ def test_list_reads_ids_from_stdin(seeded_default_org: Any) -> None:
     )
     result = CliRunner().invoke(
         app,
-        ["projects", "list", "--stdin", "--format", "raw", "--columns", "name"],
+        ["projects", "list", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="10\n11\n",
     )
     assert result.exit_code == 0, result.output
@@ -894,9 +911,8 @@ def test_list_stdin_with_names_flips_fks(seeded_default_org: Any) -> None:
     assert result.stdout.strip() == "playbooks"
 
 
-def test_list_stdin_mixes_names_and_ids(seeded_default_org: Any) -> None:
-    """A single `list --stdin` batch can mix names and numeric ids,
-    matching `get`'s mixed-batch semantic."""
+def test_list_stdin_defaults_to_name_lookup_for_all_lines(seeded_default_org: Any) -> None:
+    """A `list --stdin` default batch treats every line as a name."""
     seeded_default_org.seed(
         "projects",
         id=10,
@@ -907,20 +923,29 @@ def test_list_stdin_mixes_names_and_ids(seeded_default_org: Any) -> None:
     )
     seeded_default_org.seed(
         "projects",
-        id=11,
-        name="ops",
+        id=99,
+        name="11",
         organization=1,
         organization_name="Default",
         scm_type="git",
     )
     result = CliRunner().invoke(
         app,
-        ["projects", "list", "--stdin", "--format", "raw", "--columns", "name"],
+        [
+            "projects",
+            "list",
+            "--stdin",
+            "--organization",
+            "Default",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
         input="playbooks\n11\n",
     )
     assert result.exit_code == 0, result.output
-    assert "playbooks" in result.stdout
-    assert "ops" in result.stdout
+    assert set(result.stdout.split()) == {"10", "99"}
 
 
 def test_launch_reads_names_from_stdin(seeded_default_org: Any) -> None:
@@ -937,6 +962,39 @@ def test_launch_reads_names_from_stdin(seeded_default_org: Any) -> None:
     launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
     launched_ids = {c[1] for c in launches}
     assert launched_ids == {10, 11}
+
+
+def test_launch_numeric_name_is_default(seeded_default_org: Any) -> None:
+    """All-digit launch identifiers are template names unless ``--by-id`` is passed."""
+    seeded_default_org.seed(
+        "job_templates", id=99, name="123", organization=1, organization_name="Default"
+    )
+    seeded_default_org.seed(
+        "job_templates", id=123, name="other", organization=1, organization_name="Default"
+    )
+
+    result = CliRunner().invoke(app, ["job-templates", "launch", "123", "--org", "Default"])
+
+    assert result.exit_code == 0, result.output
+    launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
+    assert len(launches) == 1
+    assert launches[0][1] == 99
+
+
+def test_launch_by_id_uses_awx_id(seeded_default_org: Any) -> None:
+    seeded_default_org.seed(
+        "job_templates", id=99, name="123", organization=1, organization_name="Default"
+    )
+    seeded_default_org.seed(
+        "job_templates", id=123, name="other", organization=1, organization_name="Default"
+    )
+
+    result = CliRunner().invoke(app, ["job-templates", "launch", "--by-id", "123"])
+
+    assert result.exit_code == 0, result.output
+    launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
+    assert len(launches) == 1
+    assert launches[0][1] == 123
 
 
 def test_get_without_scope_raises_when_name_is_ambiguous(fake_aap: Any) -> None:

@@ -20,6 +20,7 @@ from untaped_awx.application import GetResource, ListResources
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
 from untaped_awx.cli.options import (
+    ByIdOption,
     InventoryOrganizationOption,
     InventoryStdinLookupOption,
     OrganizationStdinLookupOption,
@@ -44,8 +45,9 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
         stdin: bool = typer.Option(
             False,
             "--stdin",
-            help="Read names or numeric ids from stdin (one per line); render only those records.",
+            help="Read names from stdin (one per line); render only those records.",
         ),
+        by_id: ByIdOption = False,
         organization: OrganizationStdinLookupOption = None,
         inventory: InventoryStdinLookupOption = None,
         inventory_organization: InventoryOrganizationOption = None,
@@ -61,12 +63,13 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
     ) -> None:
-        """List resources, optionally restricted to names/ids from stdin.
+        """List resources, optionally restricted to identifiers from stdin.
 
-        With ``--stdin``, reads newline-separated names or numeric ids and
-        renders only those records — same identifier semantics as ``get
-        --stdin`` but with the tabular columns view ``list`` uses. Cannot
-        be combined with ``--search``/``--filter``/``--limit``. The
+        With ``--stdin``, reads newline-separated names (or ids when
+        ``--by-id`` is passed) and renders only those records — same
+        identifier semantics as ``get --stdin`` but with the tabular
+        columns view ``list`` uses. Cannot be combined with
+        ``--search``/``--filter``/``--limit``. The
         ``--organization`` / ``--org`` / ``--inventory`` /
         ``--inventory-organization`` / ``--inventory-org``
         scope flags apply to ``--stdin`` name lookups only (they have no
@@ -89,7 +92,7 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
                 )
                 getter = GetResource(ctx.repo)
                 records, any_failed = resolve_each(
-                    ids, lambda n: getter.by_identifier(spec, n, scope=scope)
+                    ids, lambda n: getter.by_identifier(spec, n, scope=scope, by_id=by_id)
                 )
             else:
                 filters = parse_kv_pairs(filter_, flag="--filter")
