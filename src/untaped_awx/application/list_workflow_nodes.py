@@ -7,10 +7,10 @@ controls recursion: ``0`` (default) returns only the root's nodes;
 deliberately out of scope here — this surface is about *contents*, not
 the DAG structure.
 
-Identifier resolution accepts either a numeric workflow id (fast path,
-no name lookup) or a name plus optional FK-name scope. Traversal is
-breadth-first with per-entry ancestor tracking, so true cycles emit a
-stderr warning while shared sub-workflows (diamond pattern) are
+Identifier resolution uses workflow names by default and numeric
+workflow ids only when the caller requests explicit id mode. Traversal
+is breadth-first with per-entry ancestor tracking, so true cycles emit
+a stderr warning while shared sub-workflows (diamond pattern) are
 skipped silently — both avoid re-fetching the same workflow's contents.
 """
 
@@ -20,6 +20,7 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any
 
+from untaped_awx.application.get_resource import parse_resource_id
 from untaped_awx.application.ports import (
     ResourceClient,
     WorkflowNodeRepository,
@@ -46,10 +47,11 @@ class ListWorkflowNodes:
         *,
         identifier: str,
         scope: dict[str, str] | None = None,
+        by_id: bool = False,
         max_depth: int | None = 0,
         filters: dict[str, str] | None = None,
     ) -> list[WorkflowNode]:
-        root_id = self._resolve(spec, identifier, scope=scope)
+        root_id = self._resolve(spec, identifier, scope=scope, by_id=by_id)
         out: list[WorkflowNode] = []
         listed: set[int] = {root_id}
         queue: deque[tuple[int, int, frozenset[int]]] = deque([(root_id, 0, frozenset())])
@@ -83,9 +85,10 @@ class ListWorkflowNodes:
         identifier: str,
         *,
         scope: dict[str, str] | None,
+        by_id: bool,
     ) -> int:
-        if identifier.isdecimal():
-            return int(identifier)
+        if by_id:
+            return parse_resource_id(identifier)
         record = self._resources.find_by_identity(spec, name=identifier, scope=scope)
         if record is None:
             raise ResourceNotFound(spec.kind, {"name": identifier, **(scope or {})})

@@ -17,8 +17,10 @@ from untaped import (
 )
 
 from untaped_awx.application import DeleteResource, GetResource
+from untaped_awx.application.get_resource import parse_resource_id
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli.options import (
+    ByIdOption,
     InventoryLookupOption,
     InventoryOrganizationOption,
     OrganizationLookupOption,
@@ -29,12 +31,8 @@ from untaped_awx.infrastructure.spec import AwxResourceSpec
 def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
     @app.command("delete", no_args_is_help=True)
     def delete_command(
-        names: list[str] | None = typer.Argument(
-            None, help=f"{spec.kind} name(s) or numeric id(s)."
-        ),
-        stdin: bool = typer.Option(
-            False, "--stdin", help="Read names or numeric ids from stdin (one per line)."
-        ),
+        names: list[str] | None = typer.Argument(None, help=f"{spec.kind} name(s)."),
+        stdin: bool = typer.Option(False, "--stdin", help="Read names from stdin (one per line)."),
         yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
         dry_run: bool = typer.Option(
             False,
@@ -44,23 +42,19 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
         organization: OrganizationLookupOption = None,
         inventory: InventoryLookupOption = None,
         inventory_organization: InventoryOrganizationOption = None,
-        by_name: bool = typer.Option(
-            False,
-            "--by-name",
-            help="Force name lookup (escape hatch for resources whose name is all digits).",
-        ),
+        by_id: ByIdOption = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
     ) -> None:
-        """Delete one or more resources by name or numeric id.
+        """Delete one or more resources by name, or by explicit AWX id.
 
-        ``--stdin`` reads newline-separated identifiers (same shape as
-        ``get --stdin``). Refuses to consume stdin without ``--yes`` or
-        ``--dry-run`` — can't prompt for confirmation while stdin is
-        being read. Each successful delete emits a row whose first key
-        is ``id``, so ``--format raw`` returns the deleted ids for
-        downstream pipelines.
+        ``--stdin`` reads newline-separated identifiers (names by
+        default, ids with ``--by-id``). Refuses to consume stdin without
+        ``--yes`` or ``--dry-run`` — can't prompt for confirmation while
+        stdin is being read. Each successful delete emits a row whose
+        first key is ``id``, so ``--format raw`` returns the deleted ids
+        for downstream pipelines.
         """
         if stdin and not yes and not dry_run:
             raise typer.BadParameter(
@@ -81,8 +75,8 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
             # per-id resolve GET — AWX's DELETE returns the same
             # ``not found: <url>`` shape on a missing id. One bulk
             # ``?id__in=…`` keeps the ``name`` column populated.
-            fast_path = yes and not dry_run
-            prefetch = getter.by_ids(spec, ids) if fast_path and not by_name else {}
+            fast_path = yes and not dry_run and by_id
+            prefetch = getter.by_ids(spec, ids) if fast_path else {}
             resolved, any_failed = resolve_each(
                 ids,
                 lambda n: _resolve_for_delete(
@@ -90,7 +84,7 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
                     spec=spec,
                     getter=getter,
                     scope=scope,
-                    by_name=by_name,
+                    by_id=by_id,
                     fast_path=fast_path,
                     prefetch=prefetch,
                 ),
@@ -121,7 +115,7 @@ def _resolve_for_delete(
     spec: AwxResourceSpec,
     getter: GetResource,
     scope: dict[str, str] | None,
-    by_name: bool,
+    by_id: bool,
     fast_path: bool,
     prefetch: dict[int, dict[str, Any]],
 ) -> tuple[str, dict[str, Any]]:
@@ -132,11 +126,12 @@ def _resolve_for_delete(
     only — the upcoming DELETE confirms existence. Off the fast path
     (or for name-based identifiers) goes through the normal GET.
     """
-    if fast_path and not by_name and n.isdecimal():
-        if hit := prefetch.get(int(n)):
+    if fast_path:
+        id_ = parse_resource_id(n)
+        if hit := prefetch.get(id_):
             return n, hit
-        return n, {"id": int(n)}
-    return n, getter.by_identifier(spec, n, scope=scope, by_name=by_name)
+        return n, {"id": id_}
+    return n, getter.by_identifier(spec, n, scope=scope, by_id=by_id)
 
 
 def _delete_row(record: dict[str, Any], *, deleted: bool | None = None) -> dict[str, Any]:

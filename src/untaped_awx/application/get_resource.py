@@ -1,9 +1,11 @@
-"""Use case: fetch a single resource by name (with scope) or numeric id."""
+"""Use case: fetch a single resource by name (with scope) or explicit id."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Any
+
+from untaped import ConfigError
 
 from untaped_awx.application.ports import ResourceClient
 from untaped_awx.domain import ResourceSpec
@@ -42,17 +44,11 @@ class GetResource:
         identifier: str,
         *,
         scope: dict[str, str] | None = None,
-        by_name: bool = False,
+        by_id: bool = False,
     ) -> dict[str, Any]:
-        """Dispatch between id-lookup (all-digits) and name-lookup.
-
-        ``isdecimal()`` matches Unicode category Nd — exactly the set
-        ``int()`` accepts. ``isdigit()`` admits superscripts/subscripts
-        like ``"²"`` that ``int()`` would reject. ``by_name=True`` is
-        the escape hatch for resources whose name is all digits.
-        """
-        if not by_name and identifier.isdecimal():
-            return self(spec, id_=int(identifier))
+        """Resolve an identifier as a name by default, or as an id under ``--by-id``."""
+        if by_id:
+            return self(spec, id_=parse_resource_id(identifier))
         return self(spec, name=identifier, scope=scope)
 
     def by_ids(
@@ -87,3 +83,10 @@ class GetResource:
             except AwxApiError:
                 return prefetch
         return prefetch
+
+
+def parse_resource_id(identifier: str) -> int:
+    """Parse a CLI resource id for explicit ``--by-id`` modes."""
+    if not identifier.isdecimal():
+        raise ConfigError(f"not a numeric id: {identifier!r}")
+    return int(identifier)

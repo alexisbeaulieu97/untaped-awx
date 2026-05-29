@@ -84,20 +84,32 @@ def test_lists_top_level_nodes_with_default_depth_zero() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100")
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", by_id=True)
     assert [n.id for n in result] == [1, 2]
     assert all(n.depth == 0 for n in result)
     assert [n.name for n in result] == ["alpha", "beta"]
 
 
-def test_numeric_identifier_skips_name_lookup() -> None:
+def test_by_id_identifier_skips_name_lookup() -> None:
     resources = _StubResources()
     use = ListWorkflowNodes(
         cast(WorkflowNodeRepository, _StubNodes({42: []})),
         cast(ResourceClient, resources),
     )
-    use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="42")
+    use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="42", by_id=True)
     assert resources.calls == []
+
+
+def test_numeric_identifier_defaults_to_name_lookup() -> None:
+    resources = _StubResources(found=ServerRecord(id=42, name="42"))
+    nodes = _StubNodes({42: []})
+    use = ListWorkflowNodes(
+        cast(WorkflowNodeRepository, nodes),
+        cast(ResourceClient, resources),
+    )
+    use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="42")
+    assert resources.calls == [("42", None)]
+    assert nodes.calls == [42]
 
 
 def test_name_identifier_resolves_via_find_by_identity() -> None:
@@ -148,7 +160,7 @@ def test_unlimited_depth_expands_sub_workflows() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None, by_id=True)
     assert [(n.id, n.depth) for n in result] == [(1, 0), (2, 0), (3, 1), (4, 1)]
 
 
@@ -182,7 +194,7 @@ def test_max_depth_caps_recursion() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=1)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=1, by_id=True)
     assert [(n.id, n.depth) for n in result] == [(1, 0), (2, 1)]
     assert 300 not in nodes.calls
 
@@ -208,7 +220,7 @@ def test_max_depth_zero_returns_only_root() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=0)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=0, by_id=True)
     assert [(n.id, n.depth) for n in result] == [(1, 0)]
     assert nodes.calls == [100]
 
@@ -243,7 +255,7 @@ def test_cycle_guard_emits_warning_and_skips() -> None:
         cast(ResourceClient, _StubResources()),
         warn=warnings.append,
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None, by_id=True)
     assert [(n.id, n.depth) for n in result] == [(1, 0), (2, 1)]
     assert len(warnings) == 1
     assert "cycle" in warnings[0]
@@ -272,7 +284,7 @@ def test_shared_sub_workflow_is_not_a_false_cycle() -> None:
         cast(ResourceClient, _StubResources()),
         warn=warnings.append,
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None, by_id=True)
     assert [(n.id, n.depth) for n in result] == [(1, 0), (2, 0), (3, 1)]
     assert warnings == []
     assert nodes.calls.count(300) == 1
@@ -285,7 +297,7 @@ def test_missing_summary_fields_degrades_to_none() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100")
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", by_id=True)
     assert result[0].unified_job_template == 99
     assert result[0].name is None
     assert result[0].type is None
@@ -318,7 +330,7 @@ def test_normalises_unified_job_type_to_template_type() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None, by_id=True)
     assert [(n.id, n.type, n.depth) for n in result] == [
         (1, "job_template", 0),
         (2, "workflow_job_template", 0),
@@ -336,7 +348,7 @@ def test_deleted_template_carries_null_unified_job_template() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None)
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", max_depth=None, by_id=True)
     assert nodes.calls == [100]
     assert result[0].unified_job_template is None
 
@@ -366,6 +378,7 @@ def test_filters_passed_to_every_recursive_list_nodes_call() -> None:
         identifier="100",
         max_depth=None,
         filters=filters,
+        by_id=True,
     )
     assert nodes.calls == [100, 200]
     assert nodes.params_received == [filters, filters]
@@ -377,7 +390,7 @@ def test_filters_default_to_none_when_unset() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100")
+    use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", by_id=True)
     assert nodes.params_received == [None]
 
 
@@ -406,5 +419,5 @@ def test_summary_fields_passes_through_unchanged() -> None:
         cast(WorkflowNodeRepository, nodes),
         cast(ResourceClient, _StubResources()),
     )
-    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100")
+    result = use(WORKFLOW_JOB_TEMPLATE_SPEC, identifier="100", by_id=True)
     assert result[0].summary_fields == summary

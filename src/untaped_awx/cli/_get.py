@@ -26,6 +26,7 @@ from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
 from untaped_awx.cli.options import (
+    ByIdOption,
     InventoryLookupOption,
     InventoryOrganizationOption,
     OrganizationLookupOption,
@@ -36,20 +37,12 @@ from untaped_awx.infrastructure.spec import AwxResourceSpec
 def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
     @app.command("get", no_args_is_help=True)
     def get_command(
-        names: list[str] | None = typer.Argument(
-            None, help=f"{spec.kind} name(s) or numeric id(s)."
-        ),
-        stdin: bool = typer.Option(
-            False, "--stdin", help="Read names or numeric ids from stdin (one per line)."
-        ),
+        names: list[str] | None = typer.Argument(None, help=f"{spec.kind} name(s)."),
+        stdin: bool = typer.Option(False, "--stdin", help="Read names from stdin (one per line)."),
         organization: OrganizationLookupOption = None,
         inventory: InventoryLookupOption = None,
         inventory_organization: InventoryOrganizationOption = None,
-        by_name: bool = typer.Option(
-            False,
-            "--by-name",
-            help="Force name lookup (escape hatch for resources whose name is all digits).",
-        ),
+        by_id: ByIdOption = False,
         with_names: bool = typer.Option(
             False,
             "--with-names",
@@ -59,13 +52,7 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
     ) -> None:
-        """Fetch one or more resources by name or numeric id.
-
-        All-digit identifiers are looked up by id, everything else by
-        name within the resolved organization scope. Pass ``--by-name``
-        to force name lookup when a resource's name happens to be all
-        digits.
-        """
+        """Fetch one or more resources by name, or by explicit AWX id."""
         records: list[Any] = []
         any_failed = False
         with report_errors(), open_context(profile) as ctx:
@@ -79,7 +66,7 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
             )
             getter = GetResource(ctx.repo)
             records, any_failed = resolve_each(
-                ids, lambda n: getter.by_identifier(spec, n, scope=scope, by_name=by_name)
+                ids, lambda n: getter.by_identifier(spec, n, scope=scope, by_id=by_id)
             )
         if records:
             cols = list(columns) if columns else default_get_columns(fmt, spec.list_columns)

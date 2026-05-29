@@ -28,7 +28,7 @@ from untaped_awx.application.ports import FkResolver
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._parallel import _drain_parallel, _wait_parallel
-from untaped_awx.cli.options import OrganizationOption
+from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.domain import Job
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
@@ -61,6 +61,7 @@ def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
     def launch_command(  # noqa: C901
         names: list[str] | None = typer.Argument(None, help=f"{spec.kind} name(s)."),
         stdin: bool = typer.Option(False, "--stdin", help="Read names from stdin (one per line)."),
+        by_id: ByIdOption = False,
         organization: OrganizationOption = None,
         extra_vars: list[str] | None = typer.Option(
             None, "--extra-vars", help="KEY=VAL override (repeatable)."
@@ -165,6 +166,7 @@ def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
                         action="launch",
                         scope=scope,
                         payload=payload,
+                        by_id=by_id,
                     )
                     launched.append((n, job))
                 except UntapedError as exc:

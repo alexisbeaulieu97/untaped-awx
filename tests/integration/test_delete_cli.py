@@ -31,11 +31,34 @@ def _seed_jt(fake: Any, *, id_: int, name: str) -> None:
 
 def test_delete_by_id_removes_record(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(app, ["job-templates", "delete", "10", "--yes", "--format", "raw"])
+    result = CliRunner().invoke(
+        app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
+    )
     assert result.exit_code == 0, result.output
     assert 10 not in seeded_default_org.store["job_templates"]
     # First key of the success row is ``id`` — ``-f raw`` emits the deleted id.
     assert result.stdout.strip() == "10"
+
+
+def test_delete_by_id_yes_uses_bulk_id_fast_path(
+    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under ``--by-id --yes``, delete should not do one GET per id."""
+    _seed_jt(seeded_default_org, id_=10, name="alpha")
+    original_get = seeded_default_org._get
+
+    def fail_job_template_get(api_path: str, id_: int) -> httpx.Response:
+        if api_path == "job_templates":
+            return httpx.Response(500, json={"detail": "unexpected detail GET"})
+        return original_get(api_path, id_)
+
+    monkeypatch.setattr(seeded_default_org, "_get", fail_job_template_get)
+    result = CliRunner().invoke(
+        app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert 10 not in seeded_default_org.store["job_templates"]
 
 
 def test_delete_by_name_resolves_through_organization(seeded_default_org: Any) -> None:
@@ -63,7 +86,7 @@ def test_delete_stdin_batch_removes_each(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=11, name="beta")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "--stdin", "--yes", "--format", "raw"],
+        ["job-templates", "delete", "--stdin", "--by-id", "--yes", "--format", "raw"],
         input="10\n11\n",
     )
     assert result.exit_code == 0, result.output
@@ -97,7 +120,7 @@ def test_dry_run_resolves_but_does_not_delete(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "10", "--dry-run", "--format", "raw"],
+        ["job-templates", "delete", "--by-id", "10", "--dry-run", "--format", "raw"],
     )
     assert result.exit_code == 0, result.output
     assert 10 in seeded_default_org.store["job_templates"]
@@ -110,7 +133,7 @@ def test_dry_run_with_stdin_is_allowed(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "--stdin", "--dry-run", "--format", "raw"],
+        ["job-templates", "delete", "--stdin", "--by-id", "--dry-run", "--format", "raw"],
         input="10\n",
     )
     assert result.exit_code == 0, result.output
@@ -120,7 +143,10 @@ def test_dry_run_with_stdin_is_allowed(seeded_default_org: Any) -> None:
 
 def test_delete_missing_id_emits_error_row(seeded_default_org: Any) -> None:
     """A 404 from resolution emits ``error: <id>: ...`` and exits 1."""
-    result = CliRunner().invoke(app, ["job-templates", "delete", "999", "--yes", "--format", "raw"])
+    result = CliRunner().invoke(
+        app,
+        ["job-templates", "delete", "--by-id", "999", "--yes", "--format", "raw"],
+    )
     assert result.exit_code == 1, result.output
     assert "error" in result.output.lower()
     assert "999" in result.output
@@ -131,7 +157,7 @@ def test_delete_mixed_success_and_missing_continues(seeded_default_org: Any) -> 
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "--stdin", "--yes", "--format", "raw"],
+        ["job-templates", "delete", "--stdin", "--by-id", "--yes", "--format", "raw"],
         input="10\n999\n",
     )
     assert result.exit_code == 1
@@ -146,7 +172,7 @@ def test_delete_prompt_accepts_yes(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "10", "--format", "raw"],
+        ["job-templates", "delete", "--by-id", "10", "--format", "raw"],
         input="y\n",
     )
     assert result.exit_code == 0, result.output
@@ -162,7 +188,7 @@ def test_delete_prompt_declines_aborts(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "10"],
+        ["job-templates", "delete", "--by-id", "10"],
         input="n\n",
     )
     # Exit 0 — user-initiated abort isn't an error.
@@ -178,15 +204,10 @@ def test_delete_no_args_prints_help(seeded_default_org: Any) -> None:
     assert "Usage" in result.output
 
 
-def test_delete_by_name_flag_forces_name_lookup_for_digit_named(
+def test_delete_defaults_to_name_lookup_for_digit_named(
     seeded_default_org: Any,
 ) -> None:
-    """``--by-name`` escapes the id-vs-name dispatch for all-digit names.
-
-    Without the flag, identifier ``42`` would be treated as an id and
-    miss the digit-named resource. The flag forces name lookup so the
-    resource is resolved (and deleted) by the literal name.
-    """
+    """All-digit resource names are deleted by name unless ``--by-id`` is passed."""
     # A JobTemplate whose name happens to be all digits.
     seeded_default_org.seed(
         "job_templates",
@@ -201,7 +222,6 @@ def test_delete_by_name_flag_forces_name_lookup_for_digit_named(
             "job-templates",
             "delete",
             "42",
-            "--by-name",
             "--yes",
             "--organization",
             "Default",
@@ -225,7 +245,7 @@ def test_decline_after_prior_resolve_failure_exits_1(seeded_default_org: Any) ->
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     result = CliRunner().invoke(
         app,
-        ["job-templates", "delete", "10", "999"],
+        ["job-templates", "delete", "--by-id", "10", "999"],
         input="n\n",
     )
     # Exit 1 because the resolve of 999 failed; the decline shouldn't
@@ -254,7 +274,9 @@ def test_delete_conflict_surfaces_per_id(
         return original(api_path, id_)
 
     monkeypatch.setattr(seeded_default_org, "_delete", conflict_on_10)
-    result = CliRunner().invoke(app, ["job-templates", "delete", "10", "--yes", "--format", "raw"])
+    result = CliRunner().invoke(
+        app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
+    )
     assert result.exit_code == 1
     # Record still in the store (the conflict prevented the pop).
     assert 10 in seeded_default_org.store["job_templates"]
@@ -264,8 +286,8 @@ def test_delete_conflict_surfaces_per_id(
     assert "conflict" in err.lower() or "in use" in err.lower()
 
 
-def test_delete_yes_numeric_id_populates_name_in_table(seeded_default_org: Any) -> None:
-    """``delete <id> --yes`` populates the ``name`` column in default table output.
+def test_delete_by_id_yes_populates_name_in_table(seeded_default_org: Any) -> None:
+    """``delete --by-id <id> --yes`` populates the ``name`` column.
 
     Regression guard: the previous fast-path returned a stub
     ``{"id": int(n)}`` with no ``name`` field, so the rendered table
@@ -273,7 +295,7 @@ def test_delete_yes_numeric_id_populates_name_in_table(seeded_default_org: Any) 
     bulk-prefetch via ``?id__in=…`` now fills it in.
     """
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(app, ["job-templates", "delete", "10", "--yes"])
+    result = CliRunner().invoke(app, ["job-templates", "delete", "--by-id", "10", "--yes"])
     assert result.exit_code == 0, result.output
     assert 10 not in seeded_default_org.store["job_templates"]
     assert "10" in result.stdout
@@ -281,8 +303,8 @@ def test_delete_yes_numeric_id_populates_name_in_table(seeded_default_org: Any) 
     assert "deleted" in result.stdout.lower()
 
 
-def test_delete_stdin_bulk_prefetches_names_in_one_call(seeded_default_org: Any) -> None:
-    """Batch numeric-id delete fetches every name in a single ``?id__in=`` GET.
+def test_delete_stdin_by_id_bulk_prefetches_names_in_one_call(seeded_default_org: Any) -> None:
+    """Batch ``--by-id`` delete fetches every name in a single ``?id__in=`` GET.
 
     Pins the round-trip win of the fast-path optimisation: one bulk list
     replaces N per-id resolves, and every row in the output table carries
@@ -293,7 +315,7 @@ def test_delete_stdin_bulk_prefetches_names_in_one_call(seeded_default_org: Any)
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     _seed_jt(seeded_default_org, id_=11, name="beta")
     result = CliRunner().invoke(
-        app, ["job-templates", "delete", "--stdin", "--yes"], input="10\n11\n"
+        app, ["job-templates", "delete", "--stdin", "--by-id", "--yes"], input="10\n11\n"
     )
     assert result.exit_code == 0, result.output
     assert 10 not in seeded_default_org.store["job_templates"]

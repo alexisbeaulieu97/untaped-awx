@@ -23,7 +23,7 @@ from untaped import (
 
 from untaped_awx.application import ListWorkflowNodes
 from untaped_awx.cli._context import open_context, scope_for_command
-from untaped_awx.cli.options import OrganizationOption
+from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.domain import WorkflowNode, WorkflowNodeType
 from untaped_awx.infrastructure.specs.workflow import WORKFLOW_JOB_TEMPLATE_SPEC
 
@@ -38,24 +38,23 @@ def register_nodes_command(parent: typer.Typer) -> None:
         identifiers: list[str] | None = typer.Argument(
             None,
             help=(
-                "Workflow name(s) or numeric id(s) — one or more, or "
-                "omit and pass ``--stdin``. Numeric values skip name "
-                "lookup; otherwise each name is resolved against AWX "
-                "with the same org-scope rules as ``workflow-templates "
-                "get``. Multiple roots concatenate their node trees in "
-                "the order given."
+                "Workflow name(s) — one or more, or omit and pass "
+                "``--stdin``. Pass ``--by-id`` to resolve AWX ids "
+                "instead. Multiple roots concatenate their node trees "
+                "in the order given."
             ),
         ),
         stdin: bool = typer.Option(
             False,
             "--stdin",
             help=(
-                "Read workflow names or numeric ids from stdin (one per "
-                "line); equivalent to passing them positionally. Per-root "
+                "Read workflow names from stdin (one per line); "
+                "equivalent to passing them positionally. Per-root "
                 "failures emit a stderr warning and force a non-zero "
                 "exit; other roots still emit their rows."
             ),
         ),
+        by_id: ByIdOption = False,
         organization: OrganizationOption = None,
         recursive: bool = typer.Option(
             False,
@@ -136,6 +135,7 @@ def register_nodes_command(parent: typer.Typer) -> None:
                             WORKFLOW_JOB_TEMPLATE_SPEC,
                             identifier=root,
                             scope=scope,
+                            by_id=by_id,
                             max_depth=max_depth,
                             filters=filters,
                         )
