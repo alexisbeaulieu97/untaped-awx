@@ -13,6 +13,7 @@ from untaped_awx.domain import ResourceSpec, ServerRecord
 from untaped_awx.errors import AwxApiError
 from untaped_awx.infrastructure.specs import (
     CREDENTIAL_SPEC,
+    HOST_SPEC,
     JOB_TEMPLATE_SPEC,
     SCHEDULE_SPEC,
 )
@@ -181,6 +182,97 @@ def test_save_resources_skips_kinds_with_incompatible_filters() -> None:
         ("Schedule", "skipped", "filter field 'organization' not on this kind"),
         ("JobTemplate", "saved", None),
     ]
+
+
+def test_save_resources_org_scope_uses_kind_specific_filters() -> None:
+    use, client = _use(
+        records={
+            "JobTemplate": [
+                {"id": 30, "name": "deploy", "organization": 1, "playbook": "deploy.yml"}
+            ],
+            "Host": [
+                {
+                    "id": 101,
+                    "name": "web-01",
+                    "inventory": 20,
+                    "enabled": True,
+                    "summary_fields": {
+                        "inventory": {
+                            "name": "prod",
+                            "organization_name": "Default",
+                        }
+                    },
+                }
+            ],
+            "Schedule": [
+                {
+                    "id": 50,
+                    "name": "nightly",
+                    "rrule": "FREQ=DAILY",
+                    "summary_fields": {
+                        "unified_job_template": {
+                            "name": "deploy",
+                            "unified_job_type": "job_template",
+                            "organization_name": "Default",
+                        }
+                    },
+                }
+            ],
+        },
+        specs=[JOB_TEMPLATE_SPEC, HOST_SPEC, SCHEDULE_SPEC],
+        names={("Organization", 1): "Default"},
+    )
+
+    outcomes = list(use(all_kinds=True, organization="Default"))
+
+    assert client.list_calls == [
+        ("JobTemplate", {"organization__name": "Default"}),
+        ("Host", {"inventory__organization__name": "Default"}),
+        ("Schedule", None),
+    ]
+    assert [(outcome.kind, outcome.action) for outcome in outcomes] == [
+        ("JobTemplate", "saved"),
+        ("Host", "saved"),
+        ("Schedule", "saved"),
+    ]
+
+
+def test_save_resources_org_scope_filters_schedules_by_parent_metadata() -> None:
+    use, _client = _use(
+        records={
+            "Schedule": [
+                {
+                    "id": 50,
+                    "name": "default-nightly",
+                    "rrule": "FREQ=DAILY",
+                    "summary_fields": {
+                        "unified_job_template": {
+                            "name": "deploy-default",
+                            "unified_job_type": "job_template",
+                            "organization_name": "Default",
+                        }
+                    },
+                },
+                {
+                    "id": 51,
+                    "name": "other-nightly",
+                    "rrule": "FREQ=DAILY",
+                    "summary_fields": {
+                        "unified_job_template": {
+                            "name": "deploy-other",
+                            "unified_job_type": "job_template",
+                            "organization_name": "Other",
+                        }
+                    },
+                },
+            ],
+        },
+        specs=[SCHEDULE_SPEC],
+    )
+
+    outcomes = list(use(kind="Schedule", organization="Default"))
+
+    assert [outcome.name for outcome in outcomes] == ["default-nightly"]
 
 
 @pytest.mark.parametrize(
