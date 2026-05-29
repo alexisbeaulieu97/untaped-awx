@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import typer
-from untaped import read_identifiers, report_errors, resolve_each
+from untaped import ProfileOverrideOption, read_identifiers, report_errors, resolve_each
 
 from untaped_awx.application import GetResource, ManageMembership
 from untaped_awx.cli._context import open_context, scope_for_command
@@ -90,9 +90,10 @@ def _add_membership_verb(
             "--inventory-organization",
             help="Disambiguate same-named inventories across organizations.",
         ),
+        profile: ProfileOverrideOption = None,
     ) -> None:
         any_failed = False
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             member_ids_input = read_identifiers(list(members or []), stdin=stdin)
             parent_scope = scope_for_command(
                 ctx,

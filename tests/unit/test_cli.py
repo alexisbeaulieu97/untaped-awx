@@ -63,6 +63,45 @@ def test_ping_uses_configured_api_prefix(
     assert result.stdout.strip() == "4.5.0"
 
 
+def test_ping_profile_flag_reads_named_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(
+        """
+        profiles:
+          default:
+            awx:
+              base_url: https://wrong.example.com
+              token: default-token
+              api_prefix: /api/v2/
+          stage:
+            awx:
+              base_url: https://aap.example.com
+              token: stage-token
+              api_prefix: /api/v2/
+        active: default
+        """
+    )
+    monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
+
+    with respx.mock(base_url="https://aap.example.com", assert_all_called=False) as mock:
+        mock.get("/api/v2/ping/").mock(
+            return_value=httpx.Response(
+                200,
+                json={"version": "4.5.0", "active_node": "controller-1"},
+            )
+        )
+        result = CliRunner().invoke(
+            app,
+            ["ping", "--profile", "stage", "--format", "raw", "--columns", "version"],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "4.5.0"
+
+
 def test_ping_requires_base_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UNTAPED_CONFIG", str(tmp_path / "missing.yml"))
     result = CliRunner().invoke(app, ["ping"])

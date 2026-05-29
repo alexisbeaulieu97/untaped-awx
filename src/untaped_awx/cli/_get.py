@@ -15,6 +15,7 @@ from untaped import (
     ColumnsOption,
     FormatOption,
     OutputFormat,
+    ProfileOverrideOption,
     format_output,
     read_identifiers,
     report_errors,
@@ -65,6 +66,7 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
         ),
         fmt: FormatOption = "yaml",
         columns: ColumnsOption = None,
+        profile: ProfileOverrideOption = None,
     ) -> None:
         """Fetch one or more resources by name or numeric id.
 
@@ -75,7 +77,7 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
         """
         records: list[Any] = []
         any_failed = False
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             ids = read_identifiers(list(names or []), stdin=stdin)
             scope = scope_for_command(
                 ctx,

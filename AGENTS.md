@@ -15,6 +15,12 @@ Plugin registration and CLI composition roots may import `AwxConfig`;
 infrastructure clients receive it as package-local configuration. Domain and
 application code stay config-free and depend on narrow models/ports instead.
 
+AWX commands that read settings expose the core command-local
+`ProfileOverrideOption` as `--profile` and pass it into
+`open_context(profile)`; direct config readers wrap their body in
+`profile_override(profile)`. Commands that do not read settings, such as
+`awx test list`, do not expose a no-op profile selector.
+
 Adding a new field is a three-place edit: `AwxConfig`, the call site that
 needs the value, and tests for loading/env override where relevant.
 

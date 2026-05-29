@@ -8,6 +8,7 @@ import typer
 from untaped import (
     ColumnsOption,
     FormatOption,
+    ProfileOverrideOption,
     UntapedError,
     format_output,
     read_identifiers,
@@ -59,6 +60,7 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
         ),
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
+        profile: ProfileOverrideOption = None,
     ) -> None:
         """Delete one or more resources by name or numeric id.
 
@@ -74,7 +76,7 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
                 "--stdin requires --yes (skip confirmation) or --dry-run (preview only)"
             )
         rows: list[dict[str, Any]] = []
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             ids = read_identifiers(list(names or []), stdin=stdin)
             scope = scope_for_command(
                 ctx,

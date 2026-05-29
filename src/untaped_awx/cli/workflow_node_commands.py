@@ -13,6 +13,7 @@ import typer
 from untaped import (
     ColumnsOption,
     FormatOption,
+    ProfileOverrideOption,
     UntapedError,
     format_output,
     parse_kv_pairs,
@@ -109,6 +110,7 @@ def register_nodes_command(parent: typer.Typer) -> None:
         ),
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
+        profile: ProfileOverrideOption = None,
     ) -> None:
         """List the nodes (contents) of one or more workflow job templates."""
         if depth is not None and depth < 0:
@@ -122,7 +124,7 @@ def register_nodes_command(parent: typer.Typer) -> None:
 
         nodes: list[WorkflowNode] = []
         any_failed = False
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             roots = read_identifiers(list(identifiers or []), stdin=stdin)
             filters = parse_kv_pairs(filter_, flag="--filter")
             scope = scope_for_command(ctx, organization, WORKFLOW_JOB_TEMPLATE_SPEC)

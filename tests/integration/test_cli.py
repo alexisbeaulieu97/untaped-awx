@@ -67,6 +67,47 @@ def test_job_templates_list(fake_aap: Any) -> None:
     assert result.stdout.strip() == "deploy"
 
 
+def test_job_templates_list_profile_flag_reads_named_profile(
+    fake_aap: Any,
+    aap_config: Path,
+) -> None:
+    aap_config.write_text(
+        """
+        profiles:
+          default:
+            awx:
+              base_url: https://wrong.example.com
+              token: default-token
+              api_prefix: /api/v2/
+          stage:
+            awx:
+              base_url: https://aap.example.com
+              token: stage-token
+              api_prefix: /api/v2/
+        active: default
+        """
+    )
+    _seed_basic(fake_aap)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "job-templates",
+            "list",
+            "--profile",
+            "stage",
+            "--format",
+            "raw",
+            "--columns",
+            "name",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "deploy"
+    assert yaml.safe_load(aap_config.read_text())["active"] == "default"
+
+
 def test_list_with_names_flips_fk_ids_to_names(seeded_default_org: Any) -> None:
     """``--with-names`` swaps FK columns from numeric ids to the names
     AWX returns under ``summary_fields``. Without the flag, the column
