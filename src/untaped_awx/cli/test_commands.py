@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Any
 
 import typer
-from untaped import ColumnsOption, FormatOption, format_output, parse_kv_pairs, report_errors
+from untaped import (
+    ColumnsOption,
+    FormatOption,
+    ProfileOverrideOption,
+    format_output,
+    parse_kv_pairs,
+    report_errors,
+)
 
 from untaped_awx.cli._context import AwxContext, open_context
 from untaped_awx.domain import Job
@@ -127,6 +134,7 @@ def run_command(
     ),
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """Render, resolve, launch and report on one or more test files."""
     from untaped_awx.application import RunAction, WatchJob  # noqa: PLC0415
@@ -137,7 +145,7 @@ def run_command(
     files = _expand_paths(paths)
     case_filter = set(cases) if cases else None
 
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         suites = _load_suites(
             files,
             cli_vars=cli_vars,
@@ -243,6 +251,7 @@ def validate_command(
     var: list[str] = _VAR_OPT,
     vars_file: list[Path] = _VARS_FILE_OPT,
     non_interactive: bool = _NON_INTERACTIVE_OPT,
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """Render + parse + resolve each case; report errors without launching."""
     from untaped_awx.application.test.resolver import ResolveCasePayload  # noqa: PLC0415
@@ -250,7 +259,7 @@ def validate_command(
     cli_vars = parse_kv_pairs(var, flag="--var")
     files = _expand_paths(paths)
 
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         suites = _load_suites(
             files,
             cli_vars=cli_vars,

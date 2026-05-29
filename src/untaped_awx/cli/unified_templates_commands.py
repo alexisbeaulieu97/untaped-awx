@@ -28,6 +28,7 @@ from untaped import (
     ColumnsOption,
     FormatOption,
     OutputFormat,
+    ProfileOverrideOption,
     format_output,
     parse_kv_pairs,
     read_identifiers,
@@ -82,6 +83,7 @@ def list_command(
     limit: int | None = typer.Option(None, "--limit", help="Cap result count."),
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """List Unified Job Templates (alphabetical by name)."""
     filters = parse_kv_pairs(filter_, flag="--filter")
@@ -91,7 +93,7 @@ def list_command(
                 "pass --type or --filter type=…, not both — they collide on the same param",
             )
         filters["type"] = type_
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         records = list(BrowseUnifiedTemplates(ctx.ujts)(params=filters, limit=limit))
     cols = list(columns) if columns else list(_DEFAULT_LIST_COLUMNS)
     typer.echo(format_output(records, fmt=fmt, columns=cols))
@@ -111,11 +113,12 @@ def get_command(
     ),
     fmt: OutputFormat = typer.Option("yaml", "--format", "-f"),
     columns: ColumnsOption = None,
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """Fetch one or more Unified Job Templates by numeric id."""
     records: list[dict[str, object]] = []
     missing: list[str] = []
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         identifiers = read_identifiers(list(ids or []), stdin=stdin)
         for raw in identifiers:
             if not raw.isdecimal():

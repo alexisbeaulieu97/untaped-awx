@@ -8,6 +8,7 @@ import typer
 from untaped import (
     ColumnsOption,
     FormatOption,
+    ProfileOverrideOption,
     format_output,
     parse_kv_pairs,
     read_identifiers,
@@ -65,6 +66,7 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
         ),
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
+        profile: ProfileOverrideOption = None,
     ) -> None:
         """List resources, optionally restricted to names/ids from stdin.
 
@@ -81,7 +83,7 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
             raise typer.BadParameter("--stdin cannot be combined with --search/--filter/--limit")
         records: list[dict[str, Any]] = []
         any_failed = False
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             if stdin:
                 ids = read_identifiers([], stdin=True)
                 scope = scope_for_command(

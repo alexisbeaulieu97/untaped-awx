@@ -19,10 +19,12 @@ from untaped import (
     ConfigError,
     FormatOption,
     OutputFormat,
+    ProfileOverrideOption,
     format_output,
     get_config_section,
     get_core_settings,
     parse_kv_pairs,
+    profile_override,
     read_identifiers,
     report_errors,
     resolve_each,
@@ -66,11 +68,12 @@ def _callback() -> None:
 
 @app.command("ping")
 def ping_command(
+    profile: ProfileOverrideOption = None,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
 ) -> None:
     """Check control-plane health."""
-    with report_errors():
+    with report_errors(), profile_override(profile):
         settings = get_core_settings()
         config = get_config_section("awx", AwxConfig)
         with AwxClient(config, http=settings.http) as client:
@@ -102,12 +105,13 @@ def apply_command(
             f"Capped at {APPLY_PARALLEL_CAP} (matches the HTTP connection pool default)."
         ),
     ),
+    profile: ProfileOverrideOption = None,
     fmt: OutputFormat = typer.Option("table", "--format", help="Result-table format."),
     columns: list[str] | None = typer.Option(None, "--columns", "-c"),
 ) -> None:
     """Apply YAML docs in dependency order. Default = preview; ``--yes`` writes."""
     target = resolve_apply_file(file, file_opt)
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         run_apply(
             ctx,
             target,
@@ -179,6 +183,7 @@ def save_top_command(
             "Legacy shape — preserved for scripts that `git add` the dump."
         ),
     ),
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """Bulk-save resources to a directory.
 
@@ -200,7 +205,7 @@ def save_top_command(
         raise typer.BadParameter("pass --all-kinds or --kind")
     filters = parse_kv_pairs(filter_, flag="--filter")
 
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         run_save_batch(
             ctx,
             out_dir=out_dir,
@@ -257,6 +262,7 @@ def jobs_list(
     ),
     limit: int | None = typer.Option(None, "--limit", help="Cap result count."),
     kind: str = typer.Option("job", "--kind", help=_JOB_KIND_HELP),
+    profile: ProfileOverrideOption = None,
     fmt: OutputFormat = typer.Option("table", "--format", "-f", help="Output format."),
     columns: ColumnsOption = None,
 ) -> None:
@@ -264,7 +270,7 @@ def jobs_list(
     filters = parse_kv_pairs(filter_, flag="--filter")
     if status:
         filters["status"] = status
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         records = list(ListJobs(ctx.jobs)(kind=kind, params=filters, limit=limit))
     cols = list(columns) if columns else ["id", "name", "status"]
     typer.echo(format_output(records, fmt=fmt, columns=cols))
@@ -275,6 +281,7 @@ def jobs_get(
     job_ids: list[str] | None = typer.Argument(None, help="Job ID(s)."),
     stdin: bool = typer.Option(False, "--stdin", help="Read job ids from stdin (one per line)."),
     kind: str = typer.Option("job", "--kind", help=_JOB_KIND_HELP),
+    profile: ProfileOverrideOption = None,
     fmt: OutputFormat = typer.Option("yaml", "--format", "-f"),
     columns: ColumnsOption = None,
 ) -> None:
@@ -283,7 +290,7 @@ def jobs_get(
     # body — keeps the post-``with`` exit-code dispatch safe.
     records: list[dict[str, object]] = []
     any_failed = False
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
         records, any_failed = resolve_each(
             ids, lambda n: GetJob(ctx.jobs)(kind=kind, job_id=_as_job_id(n))
@@ -308,6 +315,7 @@ def jobs_events(
         help="Server-side AWX filter, KEY=VALUE (repeatable). E.g. event=runner_on_failed.",
     ),
     kind: str = typer.Option("job", "--kind", help=_JOB_KIND_HELP),
+    profile: ProfileOverrideOption = None,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
 ) -> None:
@@ -332,7 +340,7 @@ def jobs_events(
     cols = list(columns) if columns else ["counter", "event", "host_name", "task"]
     # Hoisted so post-``with`` exit dispatch is safe regardless of body outcome.
     any_failed = False
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
         show_breadcrumb = len(ids) > 1
 
@@ -458,6 +466,7 @@ def jobs_logs(
         "raw", "--format", help="Output format (json|yaml|table|raw)."
     ),
     columns: ColumnsOption = None,
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """Print the stdout of one or more jobs. Supports follow / tail / grep.
 
@@ -474,7 +483,7 @@ def jobs_logs(
             raise typer.BadParameter(f"--grep {grep!r} is not a valid regex: {exc}") from exc
     # Hoisted so post-``with`` exit dispatch is safe regardless of body outcome.
     any_failed = False
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
         show_breadcrumb = len(ids) > 1
         cols = list(columns) if columns else None
@@ -507,6 +516,7 @@ def jobs_wait(
         "table", "--format", "-f", help="Output format (json|yaml|table|raw)."
     ),
     columns: ColumnsOption = None,
+    profile: ProfileOverrideOption = None,
 ) -> None:
     """Block until each named job reaches a terminal state.
 
@@ -518,7 +528,7 @@ def jobs_wait(
     records: list[dict[str, object]] = []
     any_failed = False
     timed_out: list[int] = []
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context(profile) as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
 
         def _wait_one(n: str) -> dict[str, object]:

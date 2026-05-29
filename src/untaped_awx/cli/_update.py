@@ -6,6 +6,7 @@ import typer
 from untaped import (
     ColumnsOption,
     FormatOption,
+    ProfileOverrideOption,
     format_output,
     report_errors,
 )
@@ -28,9 +29,10 @@ def _add_update(app: typer.Typer, spec: AwxResourceSpec) -> None:
         wait: bool = typer.Option(False, "--wait", help="Block until terminal."),
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
+        profile: ProfileOverrideOption = None,
     ) -> None:
         """Trigger an SCM sync (Project)."""
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             scope = scope_for_command(ctx, organization, spec)
             job = RunAction(ctx.repo)(spec, name=name, action="update", scope=scope)
             if wait:

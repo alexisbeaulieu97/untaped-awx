@@ -17,7 +17,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING
 
 import typer
-from untaped import get_config_section, get_core_settings
+from untaped import get_config_section, get_core_settings, profile_override
 
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.infrastructure import AwxClient, AwxConfig, AwxResourceCatalog
@@ -70,12 +70,13 @@ class AwxContext:
 
 
 @contextmanager
-def open_context() -> Iterator[AwxContext]:
-    ctx = AwxContext()
-    try:
-        yield ctx
-    finally:
-        ctx.close()
+def open_context(profile: str | None = None) -> Iterator[AwxContext]:
+    with profile_override(profile):
+        ctx = AwxContext()
+        try:
+            yield ctx
+        finally:
+            ctx.close()
 
 
 def scope_for_command(

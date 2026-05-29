@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from untaped import ColumnsOption, OutputFormat, report_errors
+from untaped import ColumnsOption, OutputFormat, ProfileOverrideOption, report_errors
 
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
 from untaped_awx.cli._apply_runner import resolve_apply_file, run_apply
@@ -37,6 +37,7 @@ def _add_apply(app: typer.Typer, spec: AwxResourceSpec) -> None:
         ),
         fmt: OutputFormat = typer.Option("table", "--format", help="Output format."),
         columns: ColumnsOption = None,
+        profile: ProfileOverrideOption = None,
     ) -> None:
         """Apply a YAML file. Default is preview-only — pass ``--yes`` to write.
 
@@ -44,7 +45,7 @@ def _add_apply(app: typer.Typer, spec: AwxResourceSpec) -> None:
         this command is scoped to the kind of its parent sub-app.
         """
         target = resolve_apply_file(file, file_opt)
-        with report_errors(), open_context() as ctx:
+        with report_errors(), open_context(profile) as ctx:
             run_apply(
                 ctx,
                 target,
