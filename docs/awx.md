@@ -13,6 +13,17 @@ workflows:
 Plus a small testing surface (`awx test`) that runs declarative,
 parameterised launch matrices against a job template.
 
+## Command map
+
+- Resource workflows: `awx <kind> list|get|save|apply|delete`
+- Job operations: `awx job-templates launch`, `awx workflow-templates launch`,
+  `awx projects update`
+- Bulk configuration: `awx apply`, `awx save --all-kinds`
+- Execution inspection: `awx jobs list|get|events|logs|wait`
+- Cross-kind discovery: `awx unified-templates`
+- Workflow inspection: `awx workflow-templates nodes`
+- Declarative launch checks: `awx test lint|render|run`
+
 ## Setup
 
 ```bash
@@ -412,8 +423,9 @@ shows *what* runs, not the DAG structure.
 
 ```bash
 # Top-level nodes only. Default columns: id,name,type,depth. Add
-# ``--columns id,identifier,name,type,depth`` if you want the DAG label.
-untaped awx workflow-templates nodes <name|id> [--organization ORG]
+# repeated ``--columns`` flags if you want the DAG label.
+untaped awx workflow-templates nodes <name|id> [--organization ORG] \
+  --columns id --columns identifier --columns name --columns type --columns depth
 
 # Flatten sub-workflows. ``depth`` tags each row's distance from the
 # root (0 = root's own nodes, 1 = one sub-workflow deep, …).
