@@ -81,6 +81,7 @@ def test_run_save_batch_writes_previous_records_before_later_failure(
             all_kinds=True,
             kind=None,
             filters={},
+            organization=None,
             print_paths=True,
         )
 
@@ -99,6 +100,7 @@ def test_run_save_batch_validates_kind_before_creating_out_dir(tmp_path: Any) ->
             all_kinds=False,
             kind="Bogus",
             filters={},
+            organization=None,
             print_paths=False,
         )
 

@@ -47,6 +47,7 @@ def run_save_batch(
     all_kinds: bool,
     kind: str | None,
     filters: dict[str, str],
+    organization: str | None,
     print_paths: bool,
 ) -> None:
     """Bulk-save resources to disk and write the requested stdout shape."""
@@ -54,6 +55,7 @@ def run_save_batch(
         all_kinds=all_kinds,
         kind=kind,
         filters=filters,
+        organization=organization,
     )
     out_dir = out_dir.expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -1559,6 +1559,208 @@ def test_save_all_filter_skips_schedules_when_filter_field_absent(
     assert not list(out_dir.glob("Schedule__*.yml"))
 
 
+def test_save_all_org_scopes_direct_org_kinds(seeded_default_org: Any, tmp_path: Path) -> None:
+    seeded_default_org.seed("organizations", id=2, name="Other")
+    seeded_default_org.seed(
+        "projects",
+        id=10,
+        name="playbooks-default",
+        organization=1,
+        organization_name="Default",
+        scm_type="git",
+    )
+    seeded_default_org.seed(
+        "projects",
+        id=11,
+        name="playbooks-other",
+        organization=2,
+        organization_name="Other",
+        scm_type="git",
+    )
+    seeded_default_org.seed(
+        "job_templates",
+        id=30,
+        name="deploy-default",
+        organization=1,
+        organization_name="Default",
+        playbook="deploy.yml",
+        project=10,
+        project_name="playbooks-default",
+    )
+    seeded_default_org.seed(
+        "job_templates",
+        id=31,
+        name="deploy-other",
+        organization=2,
+        organization_name="Other",
+        playbook="deploy.yml",
+        project=11,
+        project_name="playbooks-other",
+    )
+
+    out_dir = tmp_path / "backup"
+    result = CliRunner().invoke(
+        app,
+        ["save", "--all-kinds", "--org", "Default", "--out-dir", str(out_dir)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (out_dir / "Project__Default__playbooks-default.yml").exists()
+    assert (out_dir / "JobTemplate__Default__deploy-default.yml").exists()
+    assert not (out_dir / "Project__Other__playbooks-other.yml").exists()
+    assert not (out_dir / "JobTemplate__Other__deploy-other.yml").exists()
+
+
+def test_save_kind_org_scopes_inventory_child_kind(fake_aap: Any, tmp_path: Path) -> None:
+    fake_aap.seed("organizations", id=1, name="Default")
+    fake_aap.seed("organizations", id=2, name="Other")
+    fake_aap.seed(
+        "inventories",
+        id=20,
+        name="prod",
+        organization=1,
+        organization_name="Default",
+        kind="",
+    )
+    fake_aap.seed(
+        "inventories",
+        id=21,
+        name="prod",
+        organization=2,
+        organization_name="Other",
+        kind="",
+    )
+    fake_aap.seed(
+        "hosts",
+        id=101,
+        name="web-default",
+        inventory=20,
+        enabled=True,
+        summary_fields={"inventory": {"name": "prod", "organization_name": "Default"}},
+    )
+    fake_aap.seed(
+        "hosts",
+        id=102,
+        name="web-other",
+        inventory=21,
+        enabled=True,
+        summary_fields={"inventory": {"name": "prod", "organization_name": "Other"}},
+    )
+
+    out_dir = tmp_path / "backup"
+    result = CliRunner().invoke(
+        app,
+        ["save", "--kind", "hosts", "--org", "Default", "--out-dir", str(out_dir)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (out_dir / "Host__Inventory__Default__prod__web-default.yml").exists()
+    assert not (out_dir / "Host__Inventory__Other__prod__web-other.yml").exists()
+
+
+def test_save_all_org_includes_matching_schedules_without_invalid_filter(
+    fake_aap: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_aap.seed("organizations", id=1, name="Default")
+    fake_aap.seed("organizations", id=2, name="Other")
+    fake_aap.seed(
+        "job_templates",
+        id=30,
+        name="deploy-default",
+        organization=1,
+        organization_name="Default",
+        playbook="a.yml",
+    )
+    fake_aap.seed(
+        "job_templates",
+        id=31,
+        name="deploy-other",
+        organization=2,
+        organization_name="Other",
+        playbook="b.yml",
+    )
+    fake_aap.seed(
+        "schedules",
+        id=50,
+        name="default-nightly",
+        unified_job_template=30,
+        rrule="DTSTART:20230101T000000Z RRULE:FREQ=DAILY",
+        enabled=True,
+        summary_fields={
+            "unified_job_template": {
+                "id": 30,
+                "name": "deploy-default",
+                "unified_job_type": "job_template",
+                "organization_name": "Default",
+            }
+        },
+    )
+    fake_aap.seed(
+        "schedules",
+        id=51,
+        name="other-nightly",
+        unified_job_template=31,
+        rrule="DTSTART:20230101T000000Z RRULE:FREQ=DAILY",
+        enabled=True,
+        summary_fields={
+            "unified_job_template": {
+                "id": 31,
+                "name": "deploy-other",
+                "unified_job_type": "job_template",
+                "organization_name": "Other",
+            }
+        },
+    )
+    original_list = fake_aap._list
+    schedule_params: list[dict[str, str]] = []
+
+    def spy_list(api_path: str, params: dict[str, str]) -> Any:
+        if api_path == "schedules":
+            schedule_params.append(dict(params))
+            assert "organization__name" not in params
+            assert "inventory__organization__name" not in params
+        return original_list(api_path, params)
+
+    monkeypatch.setattr(fake_aap, "_list", spy_list)
+
+    out_dir = tmp_path / "backup"
+    result = CliRunner().invoke(
+        app,
+        ["save", "--all-kinds", "--org", "Default", "--out-dir", str(out_dir)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert schedule_params
+    assert (
+        out_dir / "Schedule__JobTemplate__Default__deploy-default__default-nightly.yml"
+    ).exists()
+    assert not (out_dir / "Schedule__JobTemplate__Other__deploy-other__other-nightly.yml").exists()
+
+
+def test_save_all_org_rejects_duplicate_raw_organization_filter(
+    fake_aap: Any, tmp_path: Path
+) -> None:
+    out_dir = tmp_path / "backup"
+    result = CliRunner().invoke(
+        app,
+        [
+            "save",
+            "--all-kinds",
+            "--org",
+            "Default",
+            "--filter",
+            "organization__name=Default",
+            "--out-dir",
+            str(out_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    output = result.output + (result.stderr or "")
+    assert "--org" in output
+    assert "organization__name" in output
+
+
 def test_save_kind_accepts_cli_name(seeded_default_org: Any, tmp_path: Path) -> None:
     """``save --kind job-templates`` should work as well as ``--kind JobTemplate``."""
     seeded_default_org.seed(

@@ -44,6 +44,7 @@ from untaped_awx.cli._context import open_context
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._factory import make_resource_app
 from untaped_awx.cli._save_runner import run_save_batch
+from untaped_awx.cli.options import OrganizationOption
 from untaped_awx.cli.test_commands import app as test_app
 from untaped_awx.cli.unified_templates_commands import app as unified_templates_app
 from untaped_awx.cli.workflow_node_commands import register_nodes_command
@@ -137,6 +138,28 @@ def _warn_legacy_all(value: bool) -> bool:
     return value
 
 
+def _reject_duplicate_org_scope(
+    organization: str | None,
+    filters: dict[str, str],
+) -> None:
+    if organization is None:
+        return
+    for key in filters:
+        if _is_raw_org_scope_filter(key):
+            raise typer.BadParameter(
+                f"do not combine --org/--organization with --filter {key}=...; "
+                "use --org for organization-scoped bulk save"
+            )
+
+
+def _is_raw_org_scope_filter(key: str) -> bool:
+    return (
+        key == "organization"
+        or key.startswith("organization__")
+        or (key == "inventory__organization" or key.startswith("inventory__organization__"))
+    )
+
+
 @app.command("save", no_args_is_help=True)
 def save_top_command(
     out_dir: Path = typer.Option(
@@ -164,15 +187,14 @@ def save_top_command(
             "(job-templates) or a domain kind (JobTemplate)."
         ),
     ),
+    organization: OrganizationOption = None,
     filter_: list[str] | None = typer.Option(
         None,
         "--filter",
         help=(
-            "Server-side filter, KEY=VALUE (repeatable). Passed verbatim to "
-            "AWX for each saved kind. Note: AWX's /schedules/ endpoint has "
-            "no organization field, so filters like organization__name=… "
-            "are 400'd by that endpoint — do a separate per-kind save if "
-            "you need org-scoped schedules."
+            "Expert server-side filter, KEY=VALUE (repeatable). Passed "
+            "verbatim to AWX for each saved kind. For organization backups, "
+            "prefer --org so each kind gets a compatible scope."
         ),
     ),
     print_paths: bool = typer.Option(
@@ -204,6 +226,7 @@ def save_top_command(
     if not all_kinds and not kind:
         raise typer.BadParameter("pass --all-kinds or --kind")
     filters = parse_kv_pairs(filter_, flag="--filter")
+    _reject_duplicate_org_scope(organization, filters)
 
     with report_errors(), open_context(profile) as ctx:
         run_save_batch(
@@ -212,6 +235,7 @@ def save_top_command(
             all_kinds=all_kinds,
             kind=kind,
             filters=filters,
+            organization=organization,
             print_paths=print_paths,
         )
 

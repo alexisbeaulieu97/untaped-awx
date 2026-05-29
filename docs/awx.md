@@ -32,9 +32,9 @@ untaped config set awx.token <bearer-token>
 # Upstream AWX users only — AAP defaults to /api/controller/v2/
 untaped config set awx.api_prefix /api/v2/
 
-# Optional: name disambiguation for get/launch/update/save/apply when
-# the same name exists in multiple orgs. Does NOT scope `list` — use
-# `--filter organization__name=<org>` for that.
+# Optional: name disambiguation for get/launch/update/per-kind save/apply
+# when the same name exists in multiple orgs. Does NOT scope `list`;
+# use `--org` on top-level bulk save when backing up one organization.
 untaped config set awx.default_organization Engineering
 
 # Health check
@@ -313,8 +313,9 @@ Use the top-level `awx apply` when you want the dependency ordering.
 
 ```bash
 untaped awx save --out-dir backup/ --all-kinds
-untaped awx save --out-dir backup/ --all-kinds --filter organization__name=Engineering
+untaped awx save --out-dir backup/ --all-kinds --org Engineering
 untaped awx save --out-dir backup/ --kind JobTemplate
+untaped awx save --out-dir backup/ --kind hosts --org Engineering
 ```
 
 Use `--all-kinds` in new scripts — bare `--all` is reserved across
@@ -334,11 +335,16 @@ straight into a future `apply` invocation. Pass `--print-paths` to swap
 stdout for the legacy "one written-file path per line" shape — useful
 for scripts that `git add` the dump.
 
-`--filter KEY=VALUE` (repeatable) is passed verbatim to AWX for every
-saved kind. AWX's `/schedules/` endpoint has no `organization` field,
-so `--filter organization__name=…` is rejected by that endpoint —
-schedules don't get included in an org-scoped backup. Run a separate
-`save --kind Schedule` (no filter) if you also need schedules.
+`--org` / `--organization` is the preferred way to back up one
+organization. Direct org-scoped kinds use AWX's organization filter,
+inventory-child kinds use their parent inventory's organization, and
+schedules are filtered by the saved parent metadata so the command does
+not send invalid organization filters to the `/schedules/` endpoint.
+
+`--filter KEY=VALUE` (repeatable) is still passed verbatim to AWX for
+advanced endpoint-specific filtering. Do not combine raw organization
+filters such as `organization__name=…` with `--org`; the command fails
+up front instead of silently double-scoping.
 
 ### `untaped awx jobs`
 

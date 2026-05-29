@@ -24,15 +24,17 @@ class SaveResources:
         all_kinds: bool = False,
         kind: str | None = None,
         filters: dict[str, str] | None = None,
+        organization: str | None = None,
     ) -> Iterator[SaveOutcome]:
         specs = self._target_specs(all_kinds=all_kinds, kind=kind)
-        return self._save_specs(specs, filters=filters or {})
+        return self._save_specs(specs, filters=filters or {}, organization=organization)
 
     def _save_specs(
         self,
         specs: list[ResourceSpec],
         *,
         filters: dict[str, str],
+        organization: str | None,
     ) -> Iterator[SaveOutcome]:
         for spec in specs:
             if spec.fidelity == "read_only":
@@ -42,7 +44,10 @@ class SaveResources:
                     detail="not roundtrippable in v0",
                 )
                 continue
-            incompatible = _filter_field_not_on_spec(filters, spec)
+            server_filters = _server_filters_for_spec(
+                spec, filters=filters, organization=organization
+            )
+            incompatible = _filter_field_not_on_spec(server_filters, spec)
             if incompatible is not None:
                 yield SaveOutcome(
                     kind=spec.kind,
@@ -50,9 +55,13 @@ class SaveResources:
                     detail=f"filter field {incompatible!r} not on this kind",
                 )
                 continue
-            records = self._save_one.find_all(spec, params=filters or None)
+            records = self._save_one.find_all(spec, params=server_filters or None)
             for record in records:
                 resource = self._save_one.from_record(spec, record)
+                if organization is not None and not _metadata_matches_org(
+                    resource.metadata, organization
+                ):
+                    continue
                 yield (
                     SaveOutcome(
                         kind=spec.kind,
@@ -77,17 +86,52 @@ class SaveResources:
 
 def _filter_field_not_on_spec(filters: dict[str, str], spec: ResourceSpec) -> str | None:
     """Return a filter field that is not represented in the domain spec."""
-    fields = (
-        set(spec.canonical_fields)
-        | set(spec.identity_keys)
-        | set(spec.read_only_fields)
-        | {fk.field for fk in spec.fk_refs}
-    )
+    fields = _filterable_fields(spec)
     for key in filters:
         base = key.split("__", 1)[0]
         if base not in fields:
             return base
     return None
+
+
+def _server_filters_for_spec(
+    spec: ResourceSpec,
+    *,
+    filters: dict[str, str],
+    organization: str | None,
+) -> dict[str, str]:
+    server_filters = dict(filters)
+    if organization is None:
+        return server_filters
+    org_filter = _organization_filter_for_spec(spec, organization)
+    return {**server_filters, **org_filter}
+
+
+def _organization_filter_for_spec(spec: ResourceSpec, organization: str) -> dict[str, str]:
+    """Return the safest server-side org filter for a bulk-save kind."""
+    if spec.kind == "Schedule":
+        return {}
+    fields = _filterable_fields(spec)
+    if "organization" in fields:
+        return {"organization__name": organization}
+    if "inventory" in fields:
+        return {"inventory__organization__name": organization}
+    return {}
+
+
+def _filterable_fields(spec: ResourceSpec) -> set[str]:
+    return (
+        set(spec.canonical_fields)
+        | set(spec.identity_keys)
+        | set(spec.read_only_fields)
+        | {fk.field for fk in spec.fk_refs}
+    )
+
+
+def _metadata_matches_org(metadata: Metadata, organization: str) -> bool:
+    if metadata.organization == organization:
+        return True
+    return metadata.parent is not None and metadata.parent.organization == organization
 
 
 def _safe_filename_segment(name: str) -> str:
