@@ -25,6 +25,11 @@ from untaped import (
 from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
+from untaped_awx.cli.options import (
+    InventoryLookupOption,
+    InventoryOrganizationOption,
+    OrganizationLookupOption,
+)
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
@@ -37,23 +42,9 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
         stdin: bool = typer.Option(
             False, "--stdin", help="Read names or numeric ids from stdin (one per line)."
         ),
-        organization: str | None = typer.Option(
-            None, "--organization", help="Scope to organization (ignored for numeric ids)."
-        ),
-        inventory: str | None = typer.Option(
-            None,
-            "--inventory",
-            help=(
-                "Scope to inventory (Host/Group only). Without this, name "
-                "lookup is global and ambiguous if the same name exists "
-                "across inventories."
-            ),
-        ),
-        inventory_organization: str | None = typer.Option(
-            None,
-            "--inventory-organization",
-            help="Disambiguate same-named inventories across orgs (Host/Group only).",
-        ),
+        organization: OrganizationLookupOption = None,
+        inventory: InventoryLookupOption = None,
+        inventory_organization: InventoryOrganizationOption = None,
         by_name: bool = typer.Option(
             False,
             "--by-name",

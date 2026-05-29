@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
@@ -164,6 +165,58 @@ def test_nodes_resolves_workflow_by_name(fake_aap: Any) -> None:
     assert result.exit_code == 0, result.output
     ids = sorted(result.stdout.strip().splitlines(), key=int)
     assert ids == ["1", "2"]
+
+
+def test_nodes_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
+    _seed_org_and_root_workflow(fake_aap)
+    fake_aap.seed("organizations", id=2, name="Other")
+    fake_aap.seed(
+        "workflow_job_templates",
+        id=300,
+        name="weekly-rollup",
+        organization=2,
+        organization_name="Other",
+    )
+    fake_aap.seed(
+        "workflow_nodes",
+        id=3,
+        identifier="other",
+        workflow_job_template=300,
+        unified_job_template=10,
+        summary_fields={
+            "unified_job_template": {
+                "id": 10,
+                "name": "smoke-test",
+                "unified_job_type": "job",
+            },
+            "workflow_job_template": {"id": 300, "name": "weekly-rollup"},
+        },
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "workflow-templates",
+            "nodes",
+            "weekly-rollup",
+            "--org",
+            "Other",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "3"
+
+
+def test_nodes_help_advertises_org_alias_without_short_o() -> None:
+    result = CliRunner().invoke(app, ["workflow-templates", "nodes", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--organization" in result.output
+    assert "--org" in result.output
+    assert re.search(r"(^|\s)-o(\s|,)", result.output) is None
 
 
 def test_nodes_unknown_workflow_exits_nonzero(fake_aap: Any) -> None:

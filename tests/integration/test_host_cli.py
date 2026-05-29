@@ -352,3 +352,34 @@ def test_hosts_get_with_inventory_organization_disambiguates_across_orgs(
     )
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == "102"
+
+
+def test_hosts_get_accepts_inventory_org_alias(seeded_default_org: Any) -> None:
+    """``--inventory-org`` matches the full ``--inventory-organization`` spelling."""
+    seeded_default_org.seed("organizations", id=2, name="Other")
+    seeded_default_org.seed(
+        "inventories", id=20, name="prod", organization=1, organization_name="Default"
+    )
+    seeded_default_org.seed(
+        "inventories", id=21, name="prod", organization=2, organization_name="Other"
+    )
+    seeded_default_org.seed("hosts", id=101, name="web-01", inventory=20, inventory_name="prod")
+    seeded_default_org.seed("hosts", id=102, name="web-01", inventory=21, inventory_name="prod")
+    result = CliRunner().invoke(
+        app,
+        [
+            "hosts",
+            "get",
+            "web-01",
+            "--inventory",
+            "prod",
+            "--inventory-org",
+            "Other",
+            "--format",
+            "raw",
+            "--columns",
+            "id",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "102"

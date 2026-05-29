@@ -19,6 +19,11 @@ from untaped import (
 from untaped_awx.application import GetResource, ListResources
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
+from untaped_awx.cli.options import (
+    InventoryOrganizationOption,
+    InventoryStdinLookupOption,
+    OrganizationStdinLookupOption,
+)
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
@@ -41,21 +46,9 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
             "--stdin",
             help="Read names or numeric ids from stdin (one per line); render only those records.",
         ),
-        organization: str | None = typer.Option(
-            None,
-            "--organization",
-            help="Scope ``--stdin`` name lookups to an organization (ignored for numeric ids).",
-        ),
-        inventory: str | None = typer.Option(
-            None,
-            "--inventory",
-            help="Scope ``--stdin`` name lookups to an inventory (Host/Group only).",
-        ),
-        inventory_organization: str | None = typer.Option(
-            None,
-            "--inventory-organization",
-            help="Disambiguate same-named inventories across orgs (Host/Group only).",
-        ),
+        organization: OrganizationStdinLookupOption = None,
+        inventory: InventoryStdinLookupOption = None,
+        inventory_organization: InventoryOrganizationOption = None,
         with_names: bool = typer.Option(
             False,
             "--with-names",
@@ -74,7 +67,8 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
         renders only those records — same identifier semantics as ``get
         --stdin`` but with the tabular columns view ``list`` uses. Cannot
         be combined with ``--search``/``--filter``/``--limit``. The
-        ``--organization`` / ``--inventory`` / ``--inventory-organization``
+        ``--organization`` / ``--org`` / ``--inventory`` /
+        ``--inventory-organization`` / ``--inventory-org``
         scope flags apply to ``--stdin`` name lookups only (they have no
         effect on server-side filtering, which already accepts
         ``--filter organization__name=…``).

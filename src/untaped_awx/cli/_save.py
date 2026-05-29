@@ -14,6 +14,11 @@ from untaped import (
 
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._save_runner import run_save_one
+from untaped_awx.cli.options import (
+    InventoryOption,
+    InventoryOrganizationOption,
+    OrganizationOption,
+)
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
@@ -24,19 +29,9 @@ def _add_save(app: typer.Typer, spec: AwxResourceSpec) -> None:
         output: Path | None = typer.Option(
             None, "--out", "-o", help="Write to FILE; default is stdout."
         ),
-        organization: str | None = typer.Option(
-            None, "--organization", help="Scope to organization."
-        ),
-        inventory: str | None = typer.Option(
-            None,
-            "--inventory",
-            help="Scope to inventory (Host/Group only).",
-        ),
-        inventory_organization: str | None = typer.Option(
-            None,
-            "--inventory-organization",
-            help="Disambiguate same-named inventories across orgs (Host/Group only).",
-        ),
+        organization: OrganizationOption = None,
+        inventory: InventoryOption = None,
+        inventory_organization: InventoryOrganizationOption = None,
         fmt: FormatOption = "yaml",
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
