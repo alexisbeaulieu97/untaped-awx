@@ -231,7 +231,7 @@ stderr and embed an inline YAML comment.
 ### Apply ordering
 
 For multi-doc files / directories: derived topologically from each spec's
-`fk_refs` (`application/apply_file._topological_sort`), with `ALL_SPECS` in
+`fk_refs` (`application/apply_ordering.topological_sort`), with `ALL_SPECS` in
 `infrastructure/specs/__init__.py` as the tie-breaker — currently yielding
 `Organization → CredentialType → Credential → Project → Inventory → Host →
 Group → JobTemplate → WorkflowJobTemplate → Schedule`. Self-referencing
@@ -250,7 +250,7 @@ setting.
 Phase 1 is parallelisable **within a kind** but serial **across kinds**.
 `ApplyFile.__call__` walks the topologically sorted docs and buckets
 them by kind via `defaultdict(list)` (Python dict insertion order
-preserves the topo order from `_topological_sort`). `defaultdict`
+preserves the topo order from `topological_sort`). `defaultdict`
 instead of `itertools.groupby` is deliberate: `groupby` requires
 consecutive same-kind docs, an invariant that lives in a different
 module — a future re-sort that interleaves kinds would silently split
