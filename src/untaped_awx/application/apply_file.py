@@ -19,11 +19,11 @@ infrastructure and are wired by the CLI composition root.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from untaped_awx.application.apply_planner import scope_for
+from untaped_awx.application.apply_ordering import topological_sort
+from untaped_awx.application.apply_prefetch import prefetch_plan
 from untaped_awx.application.ports import (
     Catalog,
     FkResolver,
@@ -69,8 +69,8 @@ class ApplyFile:
         fail_fast: bool = False,
     ) -> list[ApplyOutcome]:
         docs = list(self._reader(path))
-        ordered = _topological_sort(docs, catalog=self._catalog)
-        plan = _prefetch_plan(ordered, catalog=self._catalog)
+        ordered = topological_sort(docs, catalog=self._catalog)
+        plan = prefetch_plan(ordered, catalog=self._catalog)
         if plan:
             self._fk.prefetch(plan)
         # Two-phase apply when writing: phase 1 writes every doc's body
@@ -86,7 +86,7 @@ class ApplyFile:
         # have no dependency edges between them. Bucket by kind into a
         # dict (Python preserves insertion order, so kinds are walked
         # in first-occurrence order = topo order from ``ordered``).
-        # Defensive against any future change to ``_topological_sort``'s
+        # Defensive against any future change to ``topological_sort``'s
         # output ordering: an ``itertools.groupby`` here would silently
         # split a kind into multiple groups if docs of one kind ever
         # stopped being consecutive, hurting parallelism without
@@ -196,160 +196,3 @@ class ApplyFile:
                 action="failed",
                 detail=str(exc),
             )
-
-
-def _prefetch_plan(
-    docs: Iterable[Resource], *, catalog: Catalog
-) -> dict[str, list[dict[str, str] | None]]:
-    """Derive the ``(kind, scope)`` groups the apply pass will look up.
-
-    Walks every doc's payload, finds each ``FkRef``, and records the
-    scope under which the lookup will happen (no scope = global). The
-    result is fed to :meth:`FkResolver.prefetch` which collapses each
-    group into one bulk list.
-    """
-    seen: dict[str, set[frozenset[tuple[str, str]]]] = defaultdict(set)
-    for doc in docs:
-        spec = catalog.get(doc.kind)
-        body = doc.spec if isinstance(doc.spec, dict) else {}
-        for ref in spec.fk_refs:
-            if ref.polymorphic:
-                continue
-            if ref.kind is None or ref.field not in body or body[ref.field] is None:
-                continue
-            # Reuse apply-time scope resolution so prefetch warms the same
-            # cache buckets the apply pass will hit. Body-only lookup misses
-            # inventory-child refs (Group.hosts/children) where scope lives
-            # on metadata.parent rather than in the body.
-            scope = scope_for(ref, doc) or {}
-            seen[ref.kind].add(frozenset(scope.items()))
-    return {
-        kind: [dict(items) if items else None for items in scopes] for kind, scopes in seen.items()
-    }
-
-
-def _topological_sort(docs: Iterable[Resource], *, catalog: Catalog) -> list[Resource]:
-    """Order ``docs`` so every doc applies after the kinds it depends on.
-
-    Edges come from each kind's ``ResourceSpec.fk_refs``: a non-polymorphic
-    ``FkRef`` with a fixed ``kind`` declares "this kind references that
-    kind". Polymorphic refs (e.g. Schedule's ``parent``) read the
-    referenced kind from the resource's own data when available.
-
-    Cycles raise :class:`AwxApiError` (a real cycle in AWX would mean a
-    resource depends on itself). Unknown kinds also raise.
-    """
-    docs_list = list(docs)
-    if not docs_list:
-        return []
-
-    kinds_in_docs = {d.kind for d in docs_list}
-
-    # Resolve every kind once; raises AwxApiError on unknown kinds before
-    # any sorting work, and gives every loop below O(1) spec access.
-    specs = {kind: catalog.get(kind) for kind in kinds_in_docs}
-
-    # Build a kind-level dependency graph restricted to kinds present in
-    # the input. Cross-doc dependencies on kinds NOT present mean the
-    # parent already exists in AWX — those don't constrain ordering.
-    # Sub-endpoint multi-FKs are reconciled *after* the resource is
-    # written (associate/disassociate POSTs against ``/<id>/<sub>/``), so
-    # they don't constrain create order — and a self-reference like
-    # ``Group.children → Group`` would otherwise spuriously trip the
-    # cycle detector.
-    edges: dict[str, set[str]] = defaultdict(set)
-    for kind, spec in specs.items():
-        for ref in spec.fk_refs:
-            if ref.multi and ref.sub_endpoint is not None:
-                continue
-            if ref.kind is not None and ref.kind in kinds_in_docs and ref.kind != kind:
-                edges[kind].add(ref.kind)
-
-    # Polymorphic refs: read the referenced kind from each doc's data.
-    for doc in docs_list:
-        for ref in specs[doc.kind].fk_refs:
-            if not ref.polymorphic or ref.kind_in_value is None:
-                continue
-            value = doc.spec.get(ref.field) if isinstance(doc.spec, dict) else None
-            if value is None:
-                value = _meta_value(doc, ref.field)
-            referenced_kind = _extract_field(value, ref.kind_in_value)
-            if isinstance(referenced_kind, str) and referenced_kind in kinds_in_docs:
-                edges[doc.kind].add(referenced_kind)
-
-    # Tie-break ready kinds by the catalog's canonical order (Organization
-    # before CredentialType, etc. — see AGENTS.md
-    # "Apply ordering"). Falling back to the kind name keeps unknown-but-valid
-    # kinds deterministic.
-    kind_rank = {kind: i for i, kind in enumerate(catalog.kinds())}
-    kind_order = _kahn_topological_order(kinds_in_docs, edges, rank=kind_rank)
-
-    # Stable secondary ordering by metadata.name within a kind.
-    rank = {kind: i for i, kind in enumerate(kind_order)}
-    return sorted(docs_list, key=lambda d: (rank[d.kind], d.metadata.name))
-
-
-def _kahn_topological_order(
-    kinds: set[str],
-    edges: dict[str, set[str]],
-    *,
-    rank: dict[str, int],
-) -> list[str]:
-    """Return ``kinds`` in dependency order: a kind appears after every
-    other kind it depends on. Raises if there's a cycle.
-
-    ``edges[k]`` is the set of kinds ``k`` depends on (must apply before).
-    ``rank`` is the catalog's canonical ordering used as the tie-breaker
-    when multiple kinds are ready at once.
-    """
-
-    def order_key(k: str) -> tuple[int, str]:
-        return (rank.get(k, len(rank)), k)
-
-    # In-degree = number of unresolved dependencies for each kind.
-    in_degree = {k: len(edges.get(k, set())) for k in kinds}
-    # Reverse edges: dependents[parent] = set of children.
-    dependents: dict[str, set[str]] = defaultdict(set)
-    for child, parents in edges.items():
-        for parent in parents:
-            dependents[parent].add(child)
-
-    ready = sorted((k for k, deg in in_degree.items() if deg == 0), key=order_key)
-    ordered: list[str] = []
-    while ready:
-        kind = ready.pop(0)
-        ordered.append(kind)
-        for child in sorted(dependents.get(kind, set()), key=order_key):
-            in_degree[child] -= 1
-            if in_degree[child] == 0:
-                ready.append(child)
-        ready.sort(key=order_key)
-
-    if len(ordered) != len(kinds):
-        unresolved = sorted(k for k, deg in in_degree.items() if deg > 0)
-        raise AwxApiError(f"cycle in apply order across kinds: {', '.join(unresolved)}")
-    return ordered
-
-
-def _meta_value(doc: Resource, field: str) -> object:
-    """Polymorphic refs (Schedule's ``parent``) live under ``metadata`` in
-    the saved envelope, not ``spec``. Look there as a fallback so the
-    sorter sees the dependency the reader already validated."""
-    metadata = getattr(doc, "metadata", None)
-    if metadata is None:
-        return None
-    return getattr(metadata, field, None)
-
-
-def _extract_field(container: object, key: str) -> object:
-    """Read ``key`` from a dict OR a pydantic model.
-
-    Schedule's ``parent`` deserializes into an :class:`IdentityRef` (a
-    pydantic model), not a plain dict, so a `value.get(...)` lookup
-    silently returns nothing. Treat both shapes uniformly here.
-    """
-    if container is None:
-        return None
-    if isinstance(container, dict):
-        return container.get(key)
-    return getattr(container, key, None)

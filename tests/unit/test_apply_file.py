@@ -121,7 +121,7 @@ def test_apply_file_uses_polymorphic_parent_edge(tmp_path: Path) -> None:
 def test_apply_file_topo_sort_detects_cycles(tmp_path: Path) -> None:
     """Cycles in the spec dependency graph must surface as a clear
     error rather than silently dropping kinds from the apply order."""
-    from untaped_awx.application.apply_file import _topological_sort
+    from untaped_awx.application.apply_ordering import topological_sort
     from untaped_awx.domain import FkRef
     from untaped_awx.domain.envelope import Metadata
     from untaped_awx.infrastructure.spec import AwxResourceSpec
@@ -158,7 +158,7 @@ def test_apply_file_topo_sort_detects_cycles(tmp_path: Path) -> None:
         Resource(kind="B", metadata=Metadata(name="y"), spec={}),
     ]
     with pytest.raises(AwxApiError, match="cycle"):
-        _topological_sort(docs, catalog=cast(Catalog, _Stub()))
+        topological_sort(docs, catalog=cast(Catalog, _Stub()))
 
 
 def test_apply_file_rejects_unknown_kind(tmp_path: Path) -> None:
@@ -330,7 +330,7 @@ def test_apply_file_parallel_preserves_stable_output_order(tmp_path: Path) -> No
     outcomes_b = [(o.kind, o.name) for o in use(f, write=False)]
     assert outcomes_a == outcomes_b
     # Names are sorted lexicographically inside one kind because that's
-    # the tie-breaker in ``_topological_sort``'s final sort key.
+    # the tie-breaker in ``topological_sort``'s final sort key.
     assert [name for _, name in outcomes_a] == sorted(name for _, name in outcomes_a)
 
 
