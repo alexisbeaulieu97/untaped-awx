@@ -5,10 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from untaped import OutputFormat, format_output
+from untaped import OutputFormat
 
 from untaped_awx.application import SaveResource, SaveResources
 from untaped_awx.cli._context import AwxContext
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.errors import AwxApiError
 from untaped_awx.infrastructure.yaml_io import dump_resource, write_resource
@@ -33,11 +34,11 @@ def run_save_one(
         write_resource(output, resource, header_comment=comment)
         return
     if fmt == "yaml":
-        # Bypass format_output: apply's read_resources rejects list-wrapped docs.
+        # Bypass row rendering: apply's read_resources rejects list-wrapped docs.
         typer.echo(dump_resource(resource, header_comment=comment))
         return
     envelope = resource.model_dump(exclude_none=True)
-    typer.echo(format_output([envelope], fmt=fmt, columns=columns))
+    typer.echo(render_rows([envelope], fmt=fmt, columns=columns))
 
 
 def run_save_batch(

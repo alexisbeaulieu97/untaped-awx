@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 import yaml
 from typer.testing import CliRunner
+from untaped.settings import get_settings
 
 from untaped_awx import app
 
@@ -63,6 +64,62 @@ def test_job_templates_list(fake_aap: Any) -> None:
     )
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == "deploy"
+
+
+def test_job_templates_list_table_honours_global_ui_collection_view(
+    fake_aap: Any,
+    aap_config: Path,
+) -> None:
+    aap_config.write_text(
+        """
+        ui:
+          collection_view: list
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
+        """
+    )
+    get_settings.cache_clear()
+    _seed_basic(fake_aap)
+
+    result = CliRunner().invoke(app, ["job-templates", "list", "--format", "table"])
+
+    assert result.exit_code == 0, result.output
+    assert "id: 30" in result.stdout
+    assert "name: deploy" in result.stdout
+    assert not any(ch in result.stdout for ch in "╭╮╰╯┌┐└┘│─")
+
+
+def test_job_templates_list_raw_ignores_unknown_global_ui_theme(
+    fake_aap: Any,
+    aap_config: Path,
+) -> None:
+    aap_config.write_text(
+        """
+        ui:
+          theme: missing
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
+        """
+    )
+    get_settings.cache_clear()
+    _seed_basic(fake_aap)
+
+    result = CliRunner().invoke(
+        app,
+        ["job-templates", "list", "--format", "raw", "--columns", "name"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "deploy"
+    assert "\x1b[" not in result.output
 
 
 def test_job_templates_list_profile_flag_reads_named_profile(
@@ -295,7 +352,7 @@ def test_get_format_table_defaults_to_list_columns(fake_aap: Any) -> None:
 
 def test_get_format_raw_keeps_first_key_default(fake_aap: Any) -> None:
     """``get --format raw`` without ``--columns`` must keep
-    ``format_output``'s first-key behavior so pipelines like
+    the row renderer's first-key behavior so pipelines like
     ``get --stdin --format raw | …`` retain their established shape."""
     _seed_basic(fake_aap)
     result = CliRunner().invoke(
@@ -358,7 +415,7 @@ def test_job_templates_get(fake_aap: Any) -> None:
 
 def test_get_accepts_multiple_positional_names(seeded_default_org: Any) -> None:
     """Identifier-taking commands must support repeated positionals so users
-    can fetch several resources in one call (then pipe to format_output)."""
+    can fetch several resources in one call and pipe the rendered rows."""
     seeded_default_org.seed(
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )

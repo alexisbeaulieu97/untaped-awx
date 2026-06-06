@@ -80,7 +80,7 @@ def test_job_templates_save_default_yaml_round_trips(fake_aap: Any) -> None:
     """Default stdout (no ``--out``, no ``--format``) is a bare YAML
     envelope — a single mapping that ``read_resources`` can ingest
     without ``yaml.safe_load_all`` wrapping. Round-trip into apply
-    depends on this shape; using ``format_output(rows, fmt="yaml")``
+    depends on this shape; using row collection rendering for YAML
     would wrap in a top-level list and silently break it."""
     _seed_basic(fake_aap)
     result = CliRunner().invoke(
@@ -94,7 +94,7 @@ def test_job_templates_save_default_yaml_round_trips(fake_aap: Any) -> None:
 
 
 def test_job_templates_save_format_json_emits_envelope(fake_aap: Any) -> None:
-    """``--format json`` emits the envelope through ``format_output``
+    """``--format json`` emits the envelope through row collection rendering
     (one-element list, matching ``ping``'s single-row precedent)."""
     _seed_basic(fake_aap)
     result = CliRunner().invoke(

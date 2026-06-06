@@ -7,12 +7,12 @@ from untaped import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,
-    format_output,
     report_errors,
 )
 
 from untaped_awx.application import RunAction, WatchJob
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
@@ -37,4 +37,4 @@ def _add_update(app: typer.Typer, spec: AwxResourceSpec) -> None:
             job = RunAction(ctx.repo)(spec, name=name, action="update", scope=scope, by_id=by_id)
             if wait:
                 job = WatchJob(ctx.repo)(job)
-        typer.echo(format_output([job.model_dump()], fmt=fmt, columns=columns))
+        typer.echo(render_rows([job.model_dump()], fmt=fmt, columns=columns))

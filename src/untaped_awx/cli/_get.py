@@ -16,7 +16,6 @@ from untaped import (
     FormatOption,
     OutputFormat,
     ProfileOverrideOption,
-    format_output,
     read_identifiers,
     report_errors,
     resolve_each,
@@ -25,6 +24,7 @@ from untaped import (
 from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -74,7 +74,7 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
                 # ``cols`` may be ``None`` for non-table formats — that's
                 # fine; ``flatten_fks`` then only flattens declared fk_refs.
                 records = flatten_fks(records, spec, columns=cols)
-            typer.echo(format_output(records, fmt=fmt, columns=cols))
+            typer.echo(render_rows(records, fmt=fmt, columns=cols))
         if any_failed:
             raise typer.Exit(code=1)
 

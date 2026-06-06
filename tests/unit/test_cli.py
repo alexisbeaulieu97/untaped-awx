@@ -63,6 +63,41 @@ def test_ping_uses_configured_api_prefix(
     assert result.stdout.strip() == "4.5.0"
 
 
+def test_ping_table_honours_global_ui_collection_view(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(
+        """
+        ui:
+          collection_view: list
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
+        """
+    )
+    monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
+    get_settings.cache_clear()
+
+    with respx.mock(base_url="https://aap.example.com") as mock:
+        mock.get("/api/v2/ping/").mock(
+            return_value=httpx.Response(
+                200,
+                json={"version": "4.5.0", "active_node": "controller-1"},
+            )
+        )
+        result = CliRunner().invoke(app, ["ping", "--format", "table"])
+
+    assert result.exit_code == 0, result.output
+    assert "version: 4.5.0" in result.stdout
+    assert "active_node: controller-1" in result.stdout
+    assert not any(ch in result.stdout for ch in "╭╮╰╯┌┐└┘│─")
+
+
 def test_ping_profile_flag_reads_named_profile(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

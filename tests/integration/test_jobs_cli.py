@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 from typer.testing import CliRunner
+from untaped.settings import get_settings
 
 from untaped_awx import app
 
@@ -71,6 +73,33 @@ def test_jobs_list_returns_seeded_records(fake_aap: Any) -> None:
     assert result.exit_code == 0, result.output
     ids = sorted(result.stdout.strip().splitlines())
     assert ids == ["42", "43"]
+
+
+def test_jobs_list_table_honours_global_ui_collection_view(
+    fake_aap: Any,
+    aap_config: Path,
+) -> None:
+    aap_config.write_text(
+        """
+        ui:
+          collection_view: list
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
+        """
+    )
+    get_settings.cache_clear()
+    _seed_running_job(fake_aap, job_id=42)
+
+    result = CliRunner().invoke(app, ["jobs", "list", "--format", "table"])
+
+    assert result.exit_code == 0, result.output
+    assert "id: 42" in result.stdout
+    assert "status: successful" in result.stdout
+    assert not any(ch in result.stdout for ch in "╭╮╰╯┌┐└┘│─")
 
 
 def test_jobs_list_status_filter_passes_to_awx(fake_aap: Any) -> None:

@@ -162,6 +162,27 @@ from PATCH and shown as `(preserved existing secret)` rows.
 `$encrypted$` at *undeclared* paths fires a stderr warning and is
 dropped (paranoid net).
 
+## CLI row rendering
+
+Collected row-style AWX outputs go through `cli/_rendering.py`'s
+`render_rows`. For `--format table`, it uses core `ui_context()` so
+global `ui:` settings and registered theme plugins affect human
+terminal rendering (for example `ui.collection_view: list`). For
+`json`, `yaml`, and `raw`, it deliberately uses plain `UiContext()` so
+missing or invalid global themes never break structured output or
+pipe-oriented commands.
+
+Do not route non-row output through this helper: direct YAML envelope
+dumps, top-level bulk-save multi-doc streams, stderr warnings/status,
+prompts, tracked event text, NDJSON streams, and raw log-follow
+passthrough each have their own shape and streaming contract.
+
+The raw first-key/default-column contract remains load-bearing.
+Hand-built row dicts must keep their pipeline identifier as the first
+key, pydantic row models must keep their first declared field stable,
+and `AwxResourceSpec.list_columns` must continue to lead with `id`.
+The regression pins live in `tests/unit/test_format_raw_first_key.py`.
+
 ### `ApplyStrategy`
 
 A Protocol in `application/ports.py`. The default strategy uses plain CRUD;

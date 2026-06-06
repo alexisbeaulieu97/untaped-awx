@@ -13,12 +13,13 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import typer
-from untaped import OutputFormat, clamp_parallel, format_output
+from untaped import OutputFormat, clamp_parallel
 
 from untaped_awx.application import ApplyFile, ApplyResource
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
 from untaped_awx.application.ports import ResourceDocumentReader
 from untaped_awx.cli._context import AwxContext
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.format import diff_lines, outcome_rows
 from untaped_awx.domain import Resource
 from untaped_awx.infrastructure.yaml_io import read_resources
@@ -47,7 +48,7 @@ def run_apply(
     outcomes = ApplyFile(apply_one, reader, ctx.catalog, ctx.fk, parallel=parallel)(
         file, write=write, fail_fast=fail_fast
     )
-    typer.echo(format_output(outcome_rows(outcomes), fmt=fmt, columns=columns))
+    typer.echo(render_rows(outcome_rows(outcomes), fmt=fmt, columns=columns))
     if not write:
         for outcome in outcomes:
             for line in diff_lines(outcome):

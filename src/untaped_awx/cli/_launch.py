@@ -18,7 +18,6 @@ from untaped import (
     FormatOption,
     ProfileOverrideOption,
     UntapedError,
-    format_output,
     read_identifiers,
     report_errors,
 )
@@ -28,6 +27,7 @@ from untaped_awx.application.ports import FkResolver
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._parallel import _drain_parallel, _wait_parallel
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.domain import Job
 from untaped_awx.infrastructure.spec import AwxResourceSpec
@@ -207,7 +207,7 @@ def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
                         typer.echo(f"error: {n}: {exc}", err=True)
                         any_failed = True
         if jobs:
-            typer.echo(format_output([j.model_dump() for j in jobs], fmt=fmt, columns=columns))
+            typer.echo(render_rows([j.model_dump() for j in jobs], fmt=fmt, columns=columns))
         if track and any(j.status != "successful" for j in jobs):
             # --track promises CI-friendly exit codes: anything other than a
             # clean ``successful`` (failed/error/canceled, or still-running
