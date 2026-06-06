@@ -11,8 +11,8 @@ AAP/AWX, and running declarative launch test suites.
 Install both `untaped` and this plugin from git:
 
 ```bash
-uv tool install "git+https://github.com/alexisbeaulieu97/untaped.git" \
-  --with "untaped-awx @ git+https://github.com/alexisbeaulieu97/untaped-awx.git" \
+uv tool install "git+https://github.com/alexisbeaulieu97/untaped.git@v0.1.0" \
+  --with "untaped-awx @ git+https://github.com/alexisbeaulieu97/untaped-awx.git@v0.1.0" \
   --no-sources \
   --force
 ```
