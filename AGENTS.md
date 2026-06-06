@@ -14,6 +14,10 @@ CLI composition roots read it with `get_config_section("awx", AwxConfig)`.
 Plugin registration and CLI composition roots may import `AwxConfig`;
 infrastructure clients receive it as package-local configuration. Domain and
 application code stay config-free and depend on narrow models/ports instead.
+The plugin object also registers the packaged `untaped-awx` agent skill via
+core `SkillSpec`; keep that static skill asset current with major command
+workflow changes. The plugin object must expose `id = "awx"`, literal
+`untaped_api_version = 1`, and `register(registry)`.
 
 AWX commands that read settings expose the core command-local
 `ProfileOverrideOption` as `--profile` and pass it into

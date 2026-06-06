@@ -12,6 +12,7 @@ import pytest
 from typer.testing import CliRunner
 from untaped import get_settings
 from untaped.main import build_app
+from untaped.plugins import PluginRegistry
 from untaped.settings import reset_config_registry_for_tests
 
 from untaped_awx.plugin import plugin as awx_plugin
@@ -42,6 +43,10 @@ def test_awx_plugin_entry_point_is_declared() -> None:
     assert matches
 
 
+def test_awx_plugin_declares_untaped_api_version() -> None:
+    assert awx_plugin.untaped_api_version == 1
+
+
 def test_untaped_source_tracks_core_git_source_without_stale_revision() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     source = data["tool"]["uv"]["sources"]["untaped"]
@@ -56,6 +61,16 @@ def test_root_app_can_register_awx_plugin() -> None:
 
     assert result.exit_code == 0, result.output
     assert "Talk to Ansible Automation Platform / AWX" in result.output
+
+
+def test_awx_plugin_registers_agent_skill() -> None:
+    registry = PluginRegistry()
+
+    awx_plugin.register(registry)
+
+    spec = registry.skills["untaped-awx"]
+    assert spec.description == "Use the untaped AWX/AAP plugin."
+    assert spec.source.joinpath("SKILL.md").is_file()
 
 
 def test_config_list_includes_registered_awx_settings() -> None:
