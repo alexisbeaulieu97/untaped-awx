@@ -41,7 +41,7 @@ def _add_save(app: typer.Typer, spec: AwxResourceSpec) -> None:
         Default ``--format yaml`` emits the bare envelope so the output
         pipes straight into ``apply`` (multi-doc mapping shape that
         ``read_resources`` ingests). Non-yaml formats go through
-        ``format_output`` for a one-row projection that matches the
+        row rendering for a one-row projection that matches the
         suite-wide ``--columns`` contract. ``--columns`` applies to
         non-yaml formats only — yaml emits the bare envelope unfiltered
         so the round-trip into ``apply`` stays intact.

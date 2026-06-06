@@ -10,7 +10,6 @@ from untaped import (
     FormatOption,
     ProfileOverrideOption,
     UntapedError,
-    format_output,
     read_identifiers,
     report_errors,
     resolve_each,
@@ -19,6 +18,7 @@ from untaped import (
 from untaped_awx.application import DeleteResource, GetResource
 from untaped_awx.application.get_resource import parse_resource_id
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -104,7 +104,7 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
                         typer.echo(f"error: {identifier}: {exc}", err=True)
                         any_failed = True
         if rows:
-            typer.echo(format_output(rows, fmt=fmt, columns=columns))
+            typer.echo(render_rows(rows, fmt=fmt, columns=columns))
         if any_failed:
             raise typer.Exit(code=1)
 

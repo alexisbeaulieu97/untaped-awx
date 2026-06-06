@@ -38,7 +38,7 @@ def flatten_fks(
 
     Dotted column names (``summary_fields.inventory.name``) are
     deliberately excluded from extra-column flattening: the user is
-    already addressing nested data directly via ``format_output``'s
+    already addressing nested data directly via the row renderer's
     dotted-path walker, so flattening would double-resolve.
     """
     declared_fk_fields = {fk.field for fk in spec.fk_refs if not fk.polymorphic}

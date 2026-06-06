@@ -20,7 +20,6 @@ from untaped import (
     FormatOption,
     OutputFormat,
     ProfileOverrideOption,
-    format_output,
     get_config_section,
     get_core_settings,
     parse_kv_pairs,
@@ -43,6 +42,7 @@ from untaped_awx.cli._apply_runner import resolve_apply_file, run_apply
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._factory import make_resource_app
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli._save_runner import run_save_batch
 from untaped_awx.cli.options import OrganizationOption
 from untaped_awx.cli.test_commands import app as test_app
@@ -79,7 +79,7 @@ def ping_command(
         config = get_config_section("awx", AwxConfig)
         with AwxClient(config, http=settings.http) as client:
             status = Ping(client)()
-        typer.echo(format_output([status.model_dump()], fmt=fmt, columns=columns))
+        typer.echo(render_rows([status.model_dump()], fmt=fmt, columns=columns))
 
 
 # ---- top-level apply (multi-kind, file or directory) ----
@@ -297,7 +297,7 @@ def jobs_list(
     with report_errors(), open_context(profile) as ctx:
         records = list(ListJobs(ctx.jobs)(kind=kind, params=filters, limit=limit))
     cols = list(columns) if columns else ["id", "name", "status"]
-    typer.echo(format_output(records, fmt=fmt, columns=cols))
+    typer.echo(render_rows(records, fmt=fmt, columns=cols))
 
 
 @jobs_app.command("get", no_args_is_help=True)
@@ -320,7 +320,7 @@ def jobs_get(
             ids, lambda n: GetJob(ctx.jobs)(kind=kind, job_id=_as_job_id(n))
         )
     if records:
-        typer.echo(format_output(records, fmt=fmt, columns=list(columns) if columns else []))
+        typer.echo(render_rows(records, fmt=fmt, columns=list(columns) if columns else []))
     if any_failed:
         raise typer.Exit(code=1)
 
@@ -399,7 +399,7 @@ def _emit_events(
         # table / json document so columns line up and yaml stays a
         # well-formed list.
         rows = [ev.model_dump() for ev in events]
-        typer.echo(format_output(rows, fmt=fmt, columns=cols))
+        typer.echo(render_rows(rows, fmt=fmt, columns=cols))
         return
     if fmt == "table":
         # Table mode under --follow renders each event as a colored
@@ -423,7 +423,7 @@ def _emit_events(
             typer.echo(json.dumps(row, default=str))
         return
     for ev in events:
-        line = format_output([ev.model_dump()], fmt=fmt, columns=cols)
+        line = render_rows([ev.model_dump()], fmt=fmt, columns=cols)
         typer.echo(line)
 
 
@@ -441,7 +441,7 @@ def _emit_log_lines(
     events has ``["counter","event","host_name","task"]``.
     """
     if not follow:
-        rendered = format_output([{"line": line} for line in lines], fmt=fmt, columns=cols)
+        rendered = render_rows([{"line": line} for line in lines], fmt=fmt, columns=cols)
         if rendered:
             typer.echo(rendered)
         return
@@ -456,7 +456,7 @@ def _emit_log_lines(
             typer.echo(json.dumps(row, default=str))
         return
     if fmt == "raw":
-        # Skip the no-op ``format_output`` round-trip — raw lines are
+        # Skip the no-op row-rendering round-trip — raw lines are
         # already the final shape, and the per-line wrap is the hot path
         # on a 100k-line follow stream. ``cols`` is ignored here: log
         # rows are single-field (``line``), so any projection is either
@@ -467,10 +467,10 @@ def _emit_log_lines(
         return
     # No Rich table branch (unlike ``_emit_events``): log lines are
     # unstructured text, so ``--format table --follow`` falls through
-    # to per-line ``format_output`` like yaml does. Table-per-line is
+    # to per-line row rendering like yaml does. Table-per-line is
     # silly but the cost is on the user who asked for it.
     for line in lines:
-        typer.echo(format_output([{"line": line}], fmt=fmt, columns=cols))
+        typer.echo(render_rows([{"line": line}], fmt=fmt, columns=cols))
 
 
 @jobs_app.command("logs", no_args_is_help=True)
@@ -566,7 +566,7 @@ def jobs_wait(
 
         records, any_failed = resolve_each(ids, _wait_one)
     if records:
-        typer.echo(format_output(records, fmt=fmt, columns=columns))
+        typer.echo(render_rows(records, fmt=fmt, columns=columns))
     for job_id in timed_out:
         typer.echo(f"timeout: job {job_id} did not reach terminal state", err=True)
     if any_failed or timed_out:

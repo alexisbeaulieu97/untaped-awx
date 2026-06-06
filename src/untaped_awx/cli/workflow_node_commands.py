@@ -15,7 +15,6 @@ from untaped import (
     FormatOption,
     ProfileOverrideOption,
     UntapedError,
-    format_output,
     parse_kv_pairs,
     read_identifiers,
     report_errors,
@@ -23,6 +22,7 @@ from untaped import (
 
 from untaped_awx.application import ListWorkflowNodes
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.domain import WorkflowNode, WorkflowNodeType
 from untaped_awx.infrastructure.specs.workflow import WORKFLOW_JOB_TEMPLATE_SPEC
@@ -147,6 +147,6 @@ def register_nodes_command(parent: typer.Typer) -> None:
             nodes = [n for n in nodes if n.type == type_]
         rows = [n.model_dump() for n in nodes]
         cols = list(columns) if columns else list(_DEFAULT_COLUMNS)
-        typer.echo(format_output(rows, fmt=fmt, columns=cols))
+        typer.echo(render_rows(rows, fmt=fmt, columns=cols))
         if any_failed:
             raise typer.Exit(code=1)

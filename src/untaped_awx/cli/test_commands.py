@@ -11,12 +11,12 @@ from untaped import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,
-    format_output,
     parse_kv_pairs,
     report_errors,
 )
 
 from untaped_awx.cli._context import AwxContext, open_context
+from untaped_awx.cli._rendering import render_rows
 from untaped_awx.domain import Job
 from untaped_awx.domain.test_suite import TestSuite
 from untaped_awx.errors import AwxApiError
@@ -179,7 +179,7 @@ def run_command(
                 _print_failure_logs(ctx, result.suite, result.case, result.job_id)
 
         typer.echo(
-            format_output(
+            render_rows(
                 [r.model_dump() for r in outcome.results],
                 fmt=fmt,
                 columns=columns,
@@ -239,7 +239,7 @@ def list_command(
         rows: list[dict[str, Any]] = [_test_suite_row(suite) for suite in suites]
     else:
         rows = [_test_case_row(suite, case_name) for suite in suites for case_name in suite.cases]
-    typer.echo(format_output(rows, fmt=fmt, columns=columns))
+    typer.echo(render_rows(rows, fmt=fmt, columns=columns))
 
 
 # ---- validate ------------------------------------------------------------

@@ -29,7 +29,6 @@ from untaped import (
     FormatOption,
     OutputFormat,
     ProfileOverrideOption,
-    format_output,
     parse_kv_pairs,
     read_identifiers,
     report_errors,
@@ -38,6 +37,7 @@ from untaped import (
 from untaped_awx.application import BrowseUnifiedTemplates, GetUnifiedTemplate
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._get import default_get_columns
+from untaped_awx.cli._rendering import render_rows
 
 app = typer.Typer(
     name="unified-templates",
@@ -96,7 +96,7 @@ def list_command(
     with report_errors(), open_context(profile) as ctx:
         records = list(BrowseUnifiedTemplates(ctx.ujts)(params=filters, limit=limit))
     cols = list(columns) if columns else list(_DEFAULT_LIST_COLUMNS)
-    typer.echo(format_output(records, fmt=fmt, columns=cols))
+    typer.echo(render_rows(records, fmt=fmt, columns=cols))
 
 
 @app.command("get", no_args_is_help=True)
@@ -137,6 +137,6 @@ def get_command(
         typer.echo(f"error: {raw}: not found", err=True)
     if records:
         cols = list(columns) if columns else default_get_columns(fmt, _DEFAULT_LIST_COLUMNS)
-        typer.echo(format_output(records, fmt=fmt, columns=cols))
+        typer.echo(render_rows(records, fmt=fmt, columns=cols))
     if missing:
         raise typer.Exit(code=1)

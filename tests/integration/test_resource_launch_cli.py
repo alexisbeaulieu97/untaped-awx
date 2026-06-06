@@ -276,7 +276,7 @@ def test_launch_stdin_emits_partial_results_when_one_fails(seeded_default_org: A
     launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
     assert any(c[1] == 10 for c in launches)
     # alpha's job dict must reach stdout — without per-item resilience,
-    # the format_output call after the loop never runs and the user
+    # the row rendering call after the loop never runs and the user
     # has no record of the running job.
     assert result.stdout.strip(), "expected partial-success stdout, got empty"
     # ghost's error must surface on stderr.
