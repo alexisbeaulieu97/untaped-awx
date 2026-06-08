@@ -7,21 +7,7 @@ pass it into the AWX adapters.
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
-
-
-class _AwxSettingsLike(Protocol):
-    base_url: str | None
-    token: SecretStr | None
-    api_prefix: str
-    default_organization: str | None
-    page_size: int
-
-
-class _SettingsWithAwx(Protocol):
-    awx: _AwxSettingsLike
 
 
 class AwxConfig(BaseModel):
@@ -45,19 +31,3 @@ class AwxConfig(BaseModel):
         if not v.startswith("/") or not v.endswith("/"):
             raise ValueError(f"api_prefix must start and end with '/' (got {v!r})")
         return v
-
-    @classmethod
-    def from_settings(cls, settings: _SettingsWithAwx) -> AwxConfig:
-        """Build an ``AwxConfig`` from cross-cutting ``Settings``.
-
-        Compatibility bridge for tests and callers that already have an
-        aggregate settings object.
-        """
-        s = settings.awx
-        return cls(
-            base_url=s.base_url,
-            token=s.token,
-            api_prefix=s.api_prefix,
-            default_organization=s.default_organization,
-            page_size=s.page_size,
-        )
