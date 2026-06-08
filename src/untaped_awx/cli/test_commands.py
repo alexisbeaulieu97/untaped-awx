@@ -79,7 +79,7 @@ def _load_suites(
     from untaped_awx.infrastructure.test import (  # noqa: PLC0415
         DefaultParser,
         LocalFilesystem,
-        TyperPrompt,
+        UiPrompt,
         resolve_variables,
     )
 
@@ -87,7 +87,7 @@ def _load_suites(
         LocalFilesystem(),
         parser=DefaultParser(),
         vars_resolver=resolve_variables,
-        prompt=TyperPrompt(force_non_interactive=non_interactive),
+        prompt=UiPrompt(force_non_interactive=non_interactive),
     )
     file_list = list(paths)
     # Pre-pass: build the union of declared variable names across all files

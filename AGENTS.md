@@ -326,8 +326,10 @@ race, not the slot race.
 
 `cli/_delete.py` follows the apply pipeline's preview-by-default ethic:
 without `--yes`, each identifier is resolved via GET (so the prompt
-lists the names being deleted), the user confirms, then a per-id
-DELETE runs. Under `--yes --by-id` (no prompt to surface the name), the
+lists the names being deleted), the user confirms through
+`ui_context(strict=False).confirm(...)`, then a per-id DELETE runs. The
+prompt renders on stderr and requires TTY stdin; automation must pass
+`--yes`. Under `--yes --by-id` (no prompt to surface the name), the
 resolve phase skips the per-id GET — AWX's DELETE returns the same
 `not found: <url>` shape on a missing id, so one bulk `?id__in=…`
 prefetch (`GetResource.by_ids`) keeps the post-DELETE row's `name`
@@ -493,10 +495,14 @@ warnings) is in [`docs/awx.md`](docs/awx.md). Internals:
   has `result == "pass"`.
 - **Wiring**: `cli/test_commands.py` is the composition root; it builds
   `LoadTestSuite` (with `DefaultParser`, `resolve_variables`,
-  `TyperPrompt`), `ResolveCasePayload`, and `RunTestSuite` from
+  `UiPrompt`), `ResolveCasePayload`, and `RunTestSuite` from
   `AwxContext`. The parser/vars-resolver/prompt are application-layer
   Protocols (`application/test/ports.py`); concrete adapters live in
-  `infrastructure/test/`.
+  `infrastructure/test/`. Interactive test variables use core
+  `ui_context(strict=False)` prompt primitives: secret variables use
+  `secret`, choice variables use typed `select`, and all other variables
+  use `text`. Prompt output stays off stdout; automation should use
+  `--var`, `--vars-file`, or `--non-interactive`.
 - **`!ref` escape hatch** (in addition to `fk_refs`): `RefSentinel` lives
   in `domain/test_suite.py`; the constructor is in
   `infrastructure/test/parser.py`. Structurally distinct from a dict, so

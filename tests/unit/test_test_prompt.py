@@ -1,42 +1,126 @@
-"""Quick smoke for TyperPrompt: interactivity check + stderr routing."""
+"""Quick smoke for UiPrompt: interactivity check + core prompt routing."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
+from untaped import ConfigError, PromptChoice
 
 from untaped_awx.domain.test_suite import VariableSpec
-from untaped_awx.infrastructure.test.prompt import TyperPrompt
+from untaped_awx.infrastructure.test.prompt import UiPrompt
 
 
 def test_is_interactive_when_stdin_is_tty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stderr.isatty", lambda: False)
-    assert TyperPrompt().is_interactive() is True
+    assert UiPrompt().is_interactive() is True
 
 
 def test_not_interactive_when_stdin_redirected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("sys.stderr.isatty", lambda: True)
-    assert TyperPrompt().is_interactive() is False
+    assert UiPrompt().is_interactive() is False
 
 
 def test_force_non_interactive_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-    assert TyperPrompt(force_non_interactive=True).is_interactive() is False
+    assert UiPrompt(force_non_interactive=True).is_interactive() is False
 
 
-def test_prompt_routes_to_stderr_keeping_stdout_clean(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Prompts must go to stderr so ``--format json > out.json`` pipes are unpolluted."""
-    captured: dict[str, object] = {}
+def test_visible_prompt_uses_core_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
 
-    def fake_typer_prompt(text: str, **kwargs: object) -> str:
-        captured["text"] = text
-        captured.update(kwargs)
-        return "answer"
+    class _PromptUi:
+        def text(
+            self,
+            message: str,
+            *,
+            default: str | None = None,
+            required: bool = True,
+        ) -> str:
+            seen["message"] = message
+            seen["default"] = default
+            seen["required"] = required
+            return "answer"
 
-    monkeypatch.setattr("untaped_awx.infrastructure.test.prompt.typer.prompt", fake_typer_prompt)
-    TyperPrompt().ask(VariableSpec(name="env", type="string"))
+    monkeypatch.setattr(
+        "untaped_awx.infrastructure.test.prompt.ui_context",
+        lambda **_: _PromptUi(),
+    )
 
-    assert captured["err"] is True
+    assert UiPrompt().ask(VariableSpec(name="env", description="Environment")) == "answer"
+    assert seen == {"message": "Environment", "default": None, "required": True}
+
+
+def test_secret_prompt_uses_core_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    class _PromptUi:
+        def secret(self, message: str, *, confirmation: bool = False, required: bool = True) -> str:
+            seen["message"] = message
+            seen["confirmation"] = confirmation
+            seen["required"] = required
+            return "s3cr3t"
+
+    monkeypatch.setattr(
+        "untaped_awx.infrastructure.test.prompt.ui_context",
+        lambda **_: _PromptUi(),
+    )
+
+    assert UiPrompt().ask(VariableSpec(name="token", secret=True)) == "s3cr3t"
+    assert seen == {"message": "token", "confirmation": False, "required": True}
+
+
+def test_choice_prompt_uses_core_select(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    class _PromptUi:
+        def select(
+            self,
+            message: str,
+            choices: Sequence[PromptChoice[str]],
+            *,
+            default: str | None = None,
+            search: bool = False,
+        ) -> str:
+            seen["message"] = message
+            seen["choices"] = [(choice.value, choice.label) for choice in choices]
+            seen["default"] = default
+            seen["search"] = search
+            return "prod"
+
+    monkeypatch.setattr(
+        "untaped_awx.infrastructure.test.prompt.ui_context",
+        lambda **_: _PromptUi(),
+    )
+
+    answer = UiPrompt().ask(VariableSpec(name="env", type="choice", choices=("dev", "prod")))
+
+    assert answer == "prod"
+    assert seen == {
+        "message": "env",
+        "choices": [("dev", "dev"), ("prod", "prod")],
+        "default": None,
+        "search": False,
+    }
+
+
+def test_prompt_error_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _PromptUi:
+        def text(
+            self,
+            message: str,
+            *,
+            default: str | None = None,
+            required: bool = True,
+        ) -> str:
+            raise ConfigError("prompt cancelled")
+
+    monkeypatch.setattr(
+        "untaped_awx.infrastructure.test.prompt.ui_context",
+        lambda **_: _PromptUi(),
+    )
+
+    with pytest.raises(ConfigError, match="prompt cancelled"):
+        UiPrompt().ask(VariableSpec(name="env", type="string"))

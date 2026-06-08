@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import typer
 from untaped import (
     ColumnsOption,
+    ConfigError,
     FormatOption,
     ProfileOverrideOption,
     UntapedError,
     read_identifiers,
     report_errors,
     resolve_each,
+    ui_context,
 )
 
 from untaped_awx.application import DeleteResource, GetResource
@@ -160,7 +163,13 @@ def _confirm_delete(
     """
     if yes:
         return True
+    if not _stdin_is_interactive():
+        raise ConfigError("awx delete requires --yes when stdin is not interactive")
     typer.echo(f"About to delete {len(resolved)} {spec.kind}(s):", err=True)
     for _, record in resolved:
         typer.echo(f"  - {record.get('id')}\t{record.get('name', '')}", err=True)
-    return typer.confirm("Continue?", default=False, err=True)
+    return ui_context(strict=False).confirm("Continue?")
+
+
+def _stdin_is_interactive() -> bool:
+    return sys.stdin.isatty()

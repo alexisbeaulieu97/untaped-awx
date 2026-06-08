@@ -29,8 +29,16 @@ def _seed_jt(fake: Any, *, id_: int, name: str) -> None:
     )
 
 
-def test_delete_by_id_removes_record(seeded_default_org: Any) -> None:
+def test_delete_by_id_removes_record(
+    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
+
+    def fail_ui_context(*_: object, **__: object) -> object:
+        raise AssertionError("should not prompt with --yes")
+
+    monkeypatch.setattr("untaped_awx.cli._delete.ui_context", fail_ui_context, raising=False)
+
     result = CliRunner().invoke(
         app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
     )
@@ -168,31 +176,90 @@ def test_delete_mixed_success_and_missing_continues(seeded_default_org: Any) -> 
     assert "999" in (result.stderr or "")
 
 
-def test_delete_prompt_accepts_yes(seeded_default_org: Any) -> None:
+def test_delete_prompt_accepts_yes(
+    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
+    seen: dict[str, object] = {}
+
+    class _PromptUi:
+        def confirm(self, message: str, *, default: bool = False) -> bool:
+            seen["message"] = message
+            seen["default"] = default
+            return True
+
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete._stdin_is_interactive",
+        lambda: True,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete.ui_context",
+        lambda **_: _PromptUi(),
+        raising=False,
+    )
+
     result = CliRunner().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10", "--format", "raw"],
-        input="y\n",
     )
     assert result.exit_code == 0, result.output
     assert 10 not in seeded_default_org.store["job_templates"]
+    assert seen == {"message": "Continue?", "default": False}
     # Preamble lands on stderr so stdout stays clean for piping.
     preview = result.stderr or result.output
     assert "About to delete 1 JobTemplate" in preview
     assert "alpha" in preview
 
 
-def test_delete_prompt_declines_aborts(seeded_default_org: Any) -> None:
+def test_delete_prompt_declines_aborts(
+    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Saying no at the confirmation prompt must not call DELETE."""
     _seed_jt(seeded_default_org, id_=10, name="alpha")
+    seen: dict[str, object] = {}
+
+    class _PromptUi:
+        def confirm(self, message: str, *, default: bool = False) -> bool:
+            seen["message"] = message
+            seen["default"] = default
+            return False
+
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete._stdin_is_interactive",
+        lambda: True,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete.ui_context",
+        lambda **_: _PromptUi(),
+        raising=False,
+    )
+
     result = CliRunner().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10"],
-        input="n\n",
     )
     # Exit 0 — user-initiated abort isn't an error.
     assert result.exit_code == 0, result.output
+    assert seen == {"message": "Continue?", "default": False}
+    assert 10 in seeded_default_org.store["job_templates"]
+
+
+def test_delete_prompt_requires_yes_when_non_interactive(
+    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_jt(seeded_default_org, id_=10, name="alpha")
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete._stdin_is_interactive",
+        lambda: False,
+        raising=False,
+    )
+
+    result = CliRunner().invoke(app, ["job-templates", "delete", "--by-id", "10"])
+
+    assert result.exit_code == 1
+    assert "awx delete requires --yes when stdin is not interactive" in result.output
     assert 10 in seeded_default_org.store["job_templates"]
 
 
@@ -234,7 +301,9 @@ def test_delete_defaults_to_name_lookup_for_digit_named(
     assert result.stdout.strip() == "99"
 
 
-def test_decline_after_prior_resolve_failure_exits_1(seeded_default_org: Any) -> None:
+def test_decline_after_prior_resolve_failure_exits_1(
+    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Declining the prompt must NOT mask a prior resolve failure.
 
     Regression test: an earlier `return` skipped the `if any_failed:`
@@ -243,10 +312,25 @@ def test_decline_after_prior_resolve_failure_exits_1(seeded_default_org: Any) ->
     real input error already reported on stderr.
     """
     _seed_jt(seeded_default_org, id_=10, name="alpha")
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete._stdin_is_interactive",
+        lambda: True,
+        raising=False,
+    )
+
+    class _PromptUi:
+        def confirm(self, message: str, *, default: bool = False) -> bool:
+            return False
+
+    monkeypatch.setattr(
+        "untaped_awx.cli._delete.ui_context",
+        lambda **_: _PromptUi(),
+        raising=False,
+    )
+
     result = CliRunner().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10", "999"],
-        input="n\n",
     )
     # Exit 1 because the resolve of 999 failed; the decline shouldn't
     # erase that fact.

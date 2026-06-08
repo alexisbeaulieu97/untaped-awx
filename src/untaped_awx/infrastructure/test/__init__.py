@@ -13,14 +13,14 @@ from untaped_awx.infrastructure.test.parser import (
     load_yaml_with_refs,
     split_frontmatter,
 )
-from untaped_awx.infrastructure.test.prompt import TyperPrompt
+from untaped_awx.infrastructure.test.prompt import UiPrompt
 from untaped_awx.infrastructure.test.vars_resolver import resolve_variables
 
 __all__ = [
     "DefaultParser",
     "LocalFilesystem",
     "RefSentinel",
-    "TyperPrompt",
+    "UiPrompt",
     "build_jinja_env",
     "load_yaml_with_refs",
     "resolve_variables",
