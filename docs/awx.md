@@ -207,9 +207,6 @@ field-level; declared secret paths (`inputs.*`, `webhook_key`)
 carrying `$encrypted$` are stripped from the PATCH and shown as
 `(preserved existing secret)` rows.
 
-`--file` / `-f` remains as a **deprecated alias** for one release —
-it still works but emits a stderr warning. Prefer the positional form.
-
 ### `delete` (mutable kinds)
 
 Wired on every kind that supports `save`/`apply`: `job-templates`,
@@ -260,7 +257,7 @@ untaped awx job-templates launch <name>... [--stdin]
     [--inventory <name>] [--credential <name>]...
     [--scm-branch <b>] [--job-tag <t>]... [--skip-tag <t>]...
     [--verbosity 0..4] [--diff-mode/--no-diff-mode] [--job-type run|check]
-    [--wait | --monitor]
+    [--wait]
     [--organization <org>|--org <org>]
 ```
 
@@ -269,7 +266,7 @@ same FK lookup the apply pipeline uses. Flags that the kind doesn't
 accept (e.g. most launch flags on a workflow template) are rejected
 loudly rather than silently dropped.
 
-`--wait` / `--monitor` block until the job reaches a terminal state.
+`--wait` blocks until the job reaches a terminal state.
 
 ### `update` (projects only)
 
@@ -286,9 +283,6 @@ Triggers an SCM sync on the project.
 ```bash
 untaped awx apply FILE_OR_DIR [--yes] [--fail-fast]
 ```
-
-`--file` / `-f` remains as a **deprecated alias** for one release —
-it still works but emits a stderr warning. Prefer the positional form.
 
 Apply a single file or a whole directory of YAML envelopes. When
 multiple kinds are present, `untaped` orders them by their declared FK
@@ -318,11 +312,9 @@ untaped awx save --out-dir backup/ --kind JobTemplate
 untaped awx save --out-dir backup/ --kind hosts --org Engineering
 ```
 
-Use `--all-kinds` in new scripts — bare `--all` is reserved across
+Use `--all-kinds`; bare `--all` is reserved across
 `untaped` for commands that iterate every instance of the noun (e.g.
-`workspace sync --all` iterates workspaces). The legacy `--all`
-spelling on `save` still parses for one release with a stderr
-deprecation warning so existing scripts keep working.
+`workspace sync --all` iterates workspaces).
 
 Writes one file per resource. Filenames encode the full identity so
 same-named records across organizations don't collide:
@@ -332,8 +324,8 @@ Read-only kinds (Credential, etc.) are skipped with a one-line note.
 Default stdout is a **multi-doc YAML stream of the same envelopes the
 files contain** (one `---`-prefixed doc per record), so the dump pipes
 straight into a future `apply` invocation. Pass `--print-paths` to swap
-stdout for the legacy "one written-file path per line" shape — useful
-for scripts that `git add` the dump.
+stdout for one written-file path per line — useful for scripts that
+`git add` the dump.
 
 `--org` / `--organization` is the preferred way to back up one
 organization. Direct org-scoped kinds use AWX's organization filter,

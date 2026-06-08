@@ -118,7 +118,7 @@ def test_groups_apply_creates_group_and_associates_hosts(fake_aap: Any, tmp_path
             - web-02
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # Group record exists under inventory 20.
     groups = list(fake_aap.store["groups"].values())
@@ -163,7 +163,7 @@ def test_groups_apply_disassociates_removed_hosts(fake_aap: Any, tmp_path: Path)
             - web-01
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # web-02 was disassociated; web-01 remains.
     assert fake_aap.memberships[("groups", 200, "hosts")] == {101}
@@ -200,7 +200,7 @@ def test_groups_apply_preview_shows_membership_diff_without_writes(
             - web-01
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc)])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc)])
     assert result.exit_code == 0, result.output
     # No writes — membership stays empty.
     assert fake_aap.memberships[("groups", 200, "hosts")] == set()
@@ -236,7 +236,7 @@ def test_groups_apply_associates_child_groups(fake_aap: Any, tmp_path: Path) -> 
             - api-servers
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # The new group was created; api-servers was associated as a child.
     new_group = next(g for g in fake_aap.store["groups"].values() if g["name"] == "web-servers")
@@ -277,7 +277,7 @@ def test_groups_apply_rejects_non_list_hosts(
           hosts: web-01
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc), "--yes"])
     assert result.exit_code != 0
     assert "must be a list" in result.output
     # Critical: existing membership must NOT have been wiped.
@@ -325,7 +325,7 @@ def test_groups_save_round_trips_through_apply(fake_aap: Any, tmp_path: Path) ->
     assert save_result.exit_code == 0, save_result.output
     saved = tmp_path / "group.yml"
     saved.write_text(save_result.stdout)
-    apply_result = CliRunner().invoke(app, ["groups", "apply", "--file", str(saved), "--yes"])
+    apply_result = CliRunner().invoke(app, ["groups", "apply", str(saved), "--yes"])
     assert apply_result.exit_code == 0, apply_result.output
     assert "unchanged" in apply_result.output
     # Membership preserved exactly.
@@ -367,7 +367,7 @@ def test_groups_apply_disambiguates_inventory_by_parent_organization(
             - web-01
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     new_group = next(g for g in seeded_default_org.store["groups"].values() if g["inventory"] == 20)
     # Critical: the host associated must be Default's web-01 (id=101), not Other's (id=102).
@@ -418,7 +418,7 @@ def test_apply_file_resolves_sibling_group_children(fake_aap: Any, tmp_path: Pat
         "  description: API tier\n"
         "  hosts: [api-01]\n"
     )
-    result = CliRunner().invoke(app, ["apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # Every Group created.
     groups_by_name = {g["name"]: g for g in fake_aap.store["groups"].values()}
@@ -461,7 +461,7 @@ def test_groups_apply_unchanged_when_membership_matches(fake_aap: Any, tmp_path:
             - web-01
         """
     )
-    result = CliRunner().invoke(app, ["groups", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["groups", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # Membership preserved exactly.
     assert fake_aap.memberships[("groups", 200, "hosts")] == {101}

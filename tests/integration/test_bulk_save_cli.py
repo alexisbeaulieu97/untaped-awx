@@ -569,9 +569,7 @@ def test_save_all_default_emits_yaml_envelopes_on_stdout(
 def test_save_all_print_paths_emits_filenames_on_stdout(
     seeded_default_org: Any, tmp_path: Path
 ) -> None:
-    """``--print-paths`` is the legacy stdout shape: one written-file
-    path per line, no envelopes. Pre-existing scripts that consumed the
-    file list keep working by adding one flag."""
+    """``--print-paths`` emits one written-file path per line, no envelopes."""
     seeded_default_org.seed(
         "job_templates",
         id=30,
@@ -743,29 +741,11 @@ def test_save_all_skips_credentials(seeded_default_org: Any, tmp_path: Path) -> 
     assert "skipping Credential" in result.stderr
 
 
-@pytest.mark.parametrize(
-    ("flags", "expect_warning"),
-    [
-        (["--all-kinds"], False),
-        (["--all"], True),
-        (["--all-kinds", "--all"], True),
-    ],
-    ids=["canonical", "legacy-alias", "both"],
-)
-def test_save_all_kinds_flag_aliases(
+def test_save_all_kinds_flag(
     seeded_default_org: Any,
     tmp_path: Path,
-    flags: list[str],
-    expect_warning: bool,
 ) -> None:
-    """`--all-kinds` is canonical; `--all` is a deprecated alias.
-
-    Pins three behaviours at once:
-    - canonical name works silently,
-    - legacy alias works AND fires a stderr deprecation warning,
-    - the warning never leaks to stdout (pipeline contract — the bulk
-      dump pipes straight into ``apply``).
-    """
+    """`--all-kinds` is the only top-level all-kinds selector."""
     seeded_default_org.seed(
         "projects",
         id=10,
@@ -775,12 +755,14 @@ def test_save_all_kinds_flag_aliases(
         scm_type="git",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", *flags, "--out-dir", str(out_dir)])
+    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
     assert (out_dir / "Project__Default__playbooks.yml").exists()
     assert "deprecated" not in result.stdout
-    if expect_warning:
-        assert "--all is deprecated" in result.stderr
-        assert "--all-kinds" in result.stderr
-    else:
-        assert "deprecated" not in result.stderr
+    assert "deprecated" not in result.stderr
+
+
+def test_save_rejects_removed_all_alias() -> None:
+    result = CliRunner().invoke(app, ["save", "--all", "--out-dir", "backup"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output

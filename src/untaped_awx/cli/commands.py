@@ -38,7 +38,7 @@ from untaped_awx.application import (
     WatchJob,
 )
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
-from untaped_awx.cli._apply_runner import resolve_apply_file, run_apply
+from untaped_awx.cli._apply_runner import run_apply
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._factory import make_resource_app
@@ -87,13 +87,7 @@ def ping_command(
 
 @app.command("apply", no_args_is_help=True)
 def apply_command(
-    file: Path | None = typer.Argument(None, help="YAML file or directory."),
-    file_opt: Path | None = typer.Option(
-        None,
-        "--file",
-        "-f",
-        help="Deprecated alias; prefer the positional FILE.",
-    ),
+    file: Path = typer.Argument(help="YAML file or directory."),
     yes: bool = typer.Option(False, "--yes", help="Actually write (default is preview only)."),
     fail_fast: bool = typer.Option(False, "--fail-fast", help="Abort on first error."),
     parallel: int = typer.Option(
@@ -111,11 +105,10 @@ def apply_command(
     columns: list[str] | None = typer.Option(None, "--columns", "-c"),
 ) -> None:
     """Apply YAML docs in dependency order. Default = preview; ``--yes`` writes."""
-    target = resolve_apply_file(file, file_opt)
     with report_errors(), open_context(profile) as ctx:
         run_apply(
             ctx,
-            target,
+            file,
             write=yes,
             fail_fast=fail_fast,
             fmt=fmt,
@@ -125,17 +118,6 @@ def apply_command(
 
 
 # ---- top-level save ----
-
-
-def _warn_legacy_all(value: bool) -> bool:
-    """Emit the legacy-``--all`` deprecation warning on stderr."""
-    if value:
-        typer.echo(
-            "warning: --all is deprecated; use --all-kinds instead. "
-            "--all will be removed in a future release.",
-            err=True,
-        )
-    return value
 
 
 def _reject_duplicate_org_scope(
@@ -170,15 +152,6 @@ def save_top_command(
         "--all-kinds",
         help="Save every saveable kind (iterate the type axis).",
     ),
-    # TODO(drop-legacy-all-alias): remove this Option and the
-    # _warn_legacy_all callback above in the next minor release.
-    legacy_all: bool = typer.Option(
-        False,
-        "--all",
-        hidden=True,
-        callback=_warn_legacy_all,
-        help="Deprecated alias for --all-kinds.",
-    ),
     kind: str | None = typer.Option(
         None,
         "--kind",
@@ -200,10 +173,7 @@ def save_top_command(
     print_paths: bool = typer.Option(
         False,
         "--print-paths",
-        help=(
-            "Emit written filenames on stdout instead of the YAML envelopes. "
-            "Legacy shape — preserved for scripts that `git add` the dump."
-        ),
+        help=("Emit written filenames on stdout instead of the YAML envelopes for scripts."),
     ),
     profile: ProfileOverrideOption = None,
 ) -> None:
@@ -222,7 +192,6 @@ def save_top_command(
     ``--print-paths`` to swap stdout for the written-file list
     instead.
     """
-    all_kinds = all_kinds or legacy_all
     if not all_kinds and not kind:
         raise typer.BadParameter("pass --all-kinds or --kind")
     filters = parse_kv_pairs(filter_, flag="--filter")
