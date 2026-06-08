@@ -1,9 +1,8 @@
 """Direct unit pin for the ``LAUNCH_FLAGS`` table's silent-overwrite invariant.
 
 End-to-end flag dispatch (every flag's payload-field translation) is
-covered through the public CLI in ``tests/integration/test_cli.py``'s
-parametrised launch test — that's the right home for those assertions
-per AGENTS.md ("Test through public APIs").
+covered through the public CLI in ``tests/integration/test_resource_launch_cli.py`` —
+that's the right home for those assertions per AGENTS.md ("Test through public APIs").
 
 What an integration suite *cannot* observe is a collision: if a future
 edit makes two ``LaunchFlag`` rows share the same ``accepts_key``,
