@@ -171,5 +171,5 @@ def test_extra_known_names_does_not_silence_unrelated_typos() -> None:
 
 @pytest.fixture
 def _no_real_prompt(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Guard: the test module never calls the real TyperPrompt."""
+    """Guard: the test module never calls the real UiPrompt."""
     yield
