@@ -54,7 +54,7 @@ class SaveResource:
     ) -> list[dict[str, Any]]:
         """Return every record of ``spec.kind`` matching ``params`` (no pagination cap).
 
-        Used by ``save --all``. Params are passed verbatim to AWX so the
+        Used by ``save --all-kinds``. Params are passed verbatim to AWX so the
         caller (the CLI's ``--filter`` flag) can use any Django-style
         lookup the API supports.
         """

@@ -165,7 +165,7 @@ def test_hosts_apply_creates_host_via_nested_endpoint(
           enabled: true
         """
     )
-    result = CliRunner().invoke(app, ["hosts", "apply", "--file", str(doc), "--yes"])
+    result = CliRunner().invoke(app, ["hosts", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # The fake's nested POST handler stores the host with inventory=20.
     hosts = list(seeded_default_org.store["hosts"].values())
@@ -198,7 +198,7 @@ def test_hosts_apply_preview_does_not_write(seeded_default_org: Any, tmp_path: P
           description: Frontend web server
         """
     )
-    result = CliRunner().invoke(app, ["hosts", "apply", "--file", str(doc)])
+    result = CliRunner().invoke(app, ["hosts", "apply", str(doc)])
     assert result.exit_code == 0, result.output
     assert seeded_default_org.store["hosts"] == {}
 
@@ -240,7 +240,7 @@ def test_hosts_save_round_trips_through_apply(fake_aap: Any, tmp_path: Path) -> 
     saved = tmp_path / "host.yml"
     saved.write_text(save_result.stdout)
     # Apply with --yes so we'd error loudly if metadata.parent were missing.
-    apply_result = CliRunner().invoke(app, ["hosts", "apply", "--file", str(saved), "--yes"])
+    apply_result = CliRunner().invoke(app, ["hosts", "apply", str(saved), "--yes"])
     assert apply_result.exit_code == 0, apply_result.output
     # The host already exists with the same body — should be unchanged.
     assert "unchanged" in apply_result.output

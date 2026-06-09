@@ -18,7 +18,7 @@ class _StubClient:
     ``test_get_resource.py`` for that). ``SaveResource.__call__`` only
     invokes ``find_by_identity`` followed by an in-memory record-to-
     Resource transform; the ``list`` and ``paginate_sub_endpoint``
-    paths only fire from ``save --all`` and from sub-endpoint multi-FKs
+    paths only fire from bulk save and from sub-endpoint multi-FKs
     (Group.hosts / Group.children), neither of which these tests cover.
     """
 

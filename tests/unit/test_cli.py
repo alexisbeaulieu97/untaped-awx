@@ -4,12 +4,10 @@ from pathlib import Path
 import httpx
 import pytest
 import respx
-import typer
 from typer.testing import CliRunner
 from untaped.settings import get_settings
 
 from untaped_awx import app
-from untaped_awx.cli._apply_runner import resolve_apply_file
 
 
 @pytest.fixture(autouse=True)
@@ -303,91 +301,57 @@ def test_apply_emits_clamp_warning_above_cap(
     assert "httpx.Limits.max_connections=10" in result.output
 
 
-def test_resolve_apply_file_rejects_neither_set() -> None:
-    """Body-level guard for ``apply --yes`` (no file) — Typer can't trip
-    ``no_args_is_help`` once any flag is on the line."""
-    with pytest.raises(typer.BadParameter, match="FILE is required"):
-        resolve_apply_file(None, None)
-
-
-def test_resolve_apply_file_option_wins_over_positional(tmp_path: Path) -> None:
-    """``--file`` wins when both are given so an explicit flag overrides
-    a leftover positional."""
-    positional = tmp_path / "a.yml"
-    option = tmp_path / "b.yml"
-    assert resolve_apply_file(positional, option) == option
-    assert resolve_apply_file(positional, None) == positional
-    assert resolve_apply_file(None, option) == option
-
-
 @pytest.mark.parametrize(
     "template",
     [
-        pytest.param(["apply", "FILE"], id="positional"),
-        pytest.param(["apply", "--file", "FILE"], id="file-long"),
-        pytest.param(["apply", "-f", "FILE"], id="file-short"),
-        # "Option wins" — a real ``--file`` paired with a non-existent
-        # positional. If the positional ever won, ``read_resources``
-        # would fail and the test would non-zero.
-        pytest.param(["apply", "BOGUS", "--file", "FILE"], id="option-wins"),
+        pytest.param(["apply", "FILE"], id="top-level-positional"),
         pytest.param(["job-templates", "apply", "FILE"], id="per-kind-positional"),
-        pytest.param(["job-templates", "apply", "--file", "FILE"], id="per-kind-file-long"),
-        pytest.param(["job-templates", "apply", "-f", "FILE"], id="per-kind-file-short"),
     ],
 )
-def test_apply_accepts_positional_and_file_alias(
+def test_apply_accepts_positional_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     template: list[str],
 ) -> None:
-    """The file may be passed as a positional or via the ``--file`` / ``-f``
-    backward-compat alias; when both are given, ``--file`` wins."""
+    """Apply commands take the YAML file as a required positional argument."""
     cfg = _write_config(tmp_path)
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
     yml = tmp_path / "empty.yml"
     yml.write_text("")
-    bogus = tmp_path / "does-not-exist.yml"
-    args = [str(yml) if a == "FILE" else str(bogus) if a == "BOGUS" else a for a in template]
+    args = [str(yml) if a == "FILE" else a for a in template]
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
 
 
 @pytest.mark.parametrize(
-    ("args_template", "expect_warning"),
+    "args_template",
     [
-        pytest.param(["apply", "FILE"], False, id="positional-no-warning"),
-        pytest.param(["apply", "--file", "FILE"], True, id="long-flag-warns"),
-        pytest.param(["apply", "-f", "FILE"], True, id="short-flag-warns"),
-        pytest.param(
-            ["job-templates", "apply", "FILE"], False, id="per-kind-positional-no-warning"
-        ),
-        pytest.param(["job-templates", "apply", "--file", "FILE"], True, id="per-kind-long-warns"),
+        pytest.param(["apply", "--file", "FILE"], id="top-level-long"),
+        pytest.param(["apply", "-f", "FILE"], id="top-level-short"),
+        pytest.param(["job-templates", "apply", "--file", "FILE"], id="per-kind-long"),
+        pytest.param(["job-templates", "apply", "-f", "FILE"], id="per-kind-short"),
     ],
 )
-def test_apply_alias_emits_deprecation_warning(
+def test_apply_rejects_removed_file_alias(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     args_template: list[str],
-    expect_warning: bool,
 ) -> None:
-    """``--file`` / ``-f`` is deprecated for one release; using it must
-    emit a stderr warning so users migrate before the alias is dropped.
-    The positional form must NOT warn."""
     cfg = _write_config(tmp_path)
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
     yml = tmp_path / "empty.yml"
     yml.write_text("")
     args = [str(yml) if a == "FILE" else a for a in args_template]
     result = CliRunner().invoke(app, args)
-    assert result.exit_code == 0, result.output
-    assert ("--file/-f is deprecated" in result.output) is expect_warning
+    assert result.exit_code == 2
+    assert "No such option" in result.output
 
 
 @pytest.mark.parametrize("cmd", [["apply"], ["job-templates", "apply"]])
 def test_apply_bare_invocation_shows_help(cmd: list[str]) -> None:
     """Bare ``apply`` shows help via ``no_args_is_help`` (exit 2 — same
     convention as ``workspace path`` / ``workspace add``), not a
-    "Missing option '--file'" error left over from the old shape."""
+    missing-argument traceback."""
     result = CliRunner().invoke(app, cmd)
     assert result.exit_code == 2
     assert "Usage:" in result.output
