@@ -350,9 +350,8 @@ the concrete `JobMonitor` adapter. Cadence is **2.0 s** to match
 `PLAY [..]` / `TASK [..]` / two-space indented
 `ok|changed|failed: <host>` lines; ANSI on TTY, plain when piped or
 redirected, no TUI), then **propagates job status into the exit code**:
-exit 0 only when every tracked job ends `successful`; otherwise exit 1. `--wait` keeps
-its old quiet-block semantics; `--monitor` (the v0 silent alias for
-`--wait`) is removed.
+exit 0 only when every tracked job ends `successful`; otherwise exit 1. `--wait`
+keeps its quiet-block semantics.
 
 **Multi-template launch** (`launch a b c --track` or `--wait`) splits
 the body into a sequential launch phase and a parallel monitor phase.

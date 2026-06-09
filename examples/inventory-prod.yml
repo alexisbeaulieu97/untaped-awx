@@ -2,9 +2,9 @@
 # into a `web-servers` group plus an `app-tier` parent that contains both.
 #
 # Apply preview:
-#   uv run untaped awx apply --file examples/inventory-prod.yml
+#   uv run untaped awx apply examples/inventory-prod.yml
 # Actually write:
-#   uv run untaped awx apply --file examples/inventory-prod.yml --yes
+#   uv run untaped awx apply examples/inventory-prod.yml --yes
 #
 # The Inventory itself must already exist in AWX (Inventory CRUD is out of
 # v0 scope). The hosts and groups below reference it by name via the
