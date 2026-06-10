@@ -59,6 +59,9 @@ def _add_get(app: App, spec: AwxResourceSpec) -> None:
         profile: ProfileOverrideOption = None,
     ) -> None:
         """Fetch one or more resources by name, or by explicit AWX id."""
+        if not names and not stdin:
+            app.help_print(["get"])
+            raise SystemExit()
         records: list[Any] = []
         any_failed = False
         with report_errors(), open_context(profile) as ctx:

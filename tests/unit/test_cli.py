@@ -284,6 +284,25 @@ def test_per_kind_apply_help_advertises_parallel() -> None:
     assert "-j" in result.output
 
 
+def test_get_bare_invocation_shows_help_without_opening_context() -> None:
+    result = CliInvoker().invoke(app, ["job-templates", "get"])
+
+    assert result.exit_code == 0, result.output
+    assert "Usage:" in result.output
+    assert "awx.base_url" not in result.output
+
+
+def test_per_kind_apply_rejects_parallel_below_one_before_opening_context(tmp_path: Path) -> None:
+    yml = tmp_path / "empty.yml"
+    yml.write_text("")
+
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(yml), "--parallel", "0"])
+
+    assert result.exit_code != 0
+    assert "parallel" in result.output
+    assert "awx.base_url" not in result.output
+
+
 def test_apply_emits_clamp_warning_above_cap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

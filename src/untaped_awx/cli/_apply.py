@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Annotated
 
-from cyclopts import App, Parameter
+from cyclopts import App, Parameter, validators
 from untaped import ColumnsOption, OutputFormat, ProfileOverrideOption, report_errors
 
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
@@ -29,6 +29,7 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
             int,
             Parameter(
                 name=["--parallel", "-j"],
+                validator=validators.Number(gte=1),
                 help=(
                     "Concurrent doc writes within this kind. Phase 2 (membership) "
                     f"stays serial. Capped at {APPLY_PARALLEL_CAP} "
