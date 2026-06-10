@@ -10,7 +10,7 @@ application-layer :class:`ApplyFile` use case (which only sees a
 from collections.abc import Iterable
 from pathlib import Path
 
-from untaped import OutputFormat, clamp_parallel, echo, raise_usage, render_rows
+from untaped.api import OutputFormat, clamp_parallel, echo, raise_usage, render_rows
 
 from untaped_awx.application import ApplyFile, ApplyResource
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP

@@ -22,7 +22,13 @@ repeatedly.
 from typing import Annotated, Any, Literal
 
 from cyclopts import App, Parameter
-from untaped import ProfileOverrideOption, create_app, read_identifiers, report_errors, resolve_each
+from untaped.api import (
+    ProfileOverrideOption,
+    create_app,
+    read_identifiers,
+    report_errors,
+    resolve_each,
+)
 
 from untaped_awx.application import GetResource, ManageMembership
 from untaped_awx.cli._context import open_context, scope_for_command

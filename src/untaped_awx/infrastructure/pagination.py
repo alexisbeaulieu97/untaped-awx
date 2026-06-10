@@ -11,7 +11,17 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from untaped.api import paginate_pages
+
 from untaped_awx.infrastructure.awx_client import AwxClient
+
+# `paginate_pages`'s default `max_pages=100` is sized for short cursor
+# walks; AWX collections (job events especially) legitimately span far
+# more pages, and uncapped iteration was this module's documented
+# contract. Keep a generous ceiling so the core helper's
+# repeated-cursor/non-convergence guards still apply without capping
+# real datasets.
+_MAX_PAGES = 10_000
 
 
 def paginate(
@@ -28,17 +38,19 @@ def paginate(
     ``params`` are query parameters for the *first* page only — AWX
     bakes them into the ``next`` URL it returns. ``limit`` caps the
     total number of items yielded.
+
+    The cursor loop is core's :func:`untaped.api.paginate_pages`; the
+    AWX shape maps onto it with the ``next`` URL as the cursor (``None``
+    selects the params-carrying first request).
     """
     initial_params = {**(params or {}), "page_size": str(page_size)}
-    page: dict[str, Any] = client.get_json(path, params=initial_params)
-    yielded = 0
-    while True:
-        for item in page.get("results", []):
-            if limit is not None and yielded >= limit:
-                return
-            yield item
-            yielded += 1
-        next_url = page.get("next")
-        if not next_url:
-            return
-        page = client.get_absolute_json(next_url)
+
+    def fetch(cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
+        page: dict[str, Any] = (
+            client.get_json(path, params=initial_params)
+            if cursor is None
+            else client.get_absolute_json(cursor)
+        )
+        return list(page.get("results", [])), page.get("next")
+
+    yield from paginate_pages(fetch, limit=limit, max_pages=_MAX_PAGES)

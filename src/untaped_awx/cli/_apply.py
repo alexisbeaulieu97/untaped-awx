@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 from cyclopts import App, Parameter, validators
-from untaped import ColumnsOption, OutputFormat, ProfileOverrideOption, report_errors
+from untaped.api import ColumnsOption, OutputFormat, ProfileOverrideOption, report_errors
 
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
 from untaped_awx.cli._apply_runner import run_apply

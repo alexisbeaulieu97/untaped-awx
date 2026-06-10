@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import tomllib
 from collections.abc import Iterator
 from importlib.metadata import entry_points
@@ -10,11 +12,12 @@ from pathlib import Path
 
 import pytest
 from untaped import get_settings
+from untaped.api import PluginManifest
 from untaped.main import build_app
-from untaped.plugins import PluginRegistry
 from untaped.settings import reset_config_registry_for_tests
 from untaped.testing import CliInvoker
 
+from untaped_awx.infrastructure import AwxConfig
 from untaped_awx.plugin import plugin as awx_plugin
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,7 +47,7 @@ def test_awx_plugin_entry_point_is_declared() -> None:
 
 
 def test_awx_plugin_declares_untaped_api_version() -> None:
-    assert awx_plugin.untaped_api_version == 2
+    assert awx_plugin.untaped_api_version == 3
 
 
 def test_untaped_source_tracks_core_default_branch() -> None:
@@ -63,14 +66,42 @@ def test_root_app_can_register_awx_plugin() -> None:
     assert "Talk to Ansible Automation Platform / AWX" in result.output
 
 
-def test_awx_plugin_registers_agent_skill() -> None:
-    registry = PluginRegistry()
+def test_awx_plugin_manifest_shape() -> None:
+    manifest = awx_plugin.manifest()
 
-    awx_plugin.register(registry)
+    assert isinstance(manifest, PluginManifest)
+    (cli,) = manifest.clis
+    assert cli.name == "awx"
+    assert cli.app is None
+    assert cli.import_path == "untaped_awx.cli:app"
+    assert cli.help
+    assert manifest.profile_settings == {"awx": AwxConfig}
 
-    spec = registry.skills["untaped-awx"]
+
+def test_awx_plugin_manifest_registers_agent_skill() -> None:
+    manifest = awx_plugin.manifest()
+
+    (spec,) = manifest.skills
+    assert spec.name == "untaped-awx"
     assert spec.description == "Use the untaped AWX/AAP plugin."
     assert spec.source.joinpath("SKILL.md").is_file()
+
+
+def test_plugin_import_keeps_cli_module_off_the_startup_path() -> None:
+    """``CliSpec.import_path`` only pays off if loading the plugin object
+    (package ``__init__`` + ``plugin`` module) never imports the CLI tree.
+    A subprocess gives a clean ``sys.modules`` to assert against.
+    """
+    code = (
+        "import sys\n"
+        "import untaped_awx\n"
+        "import untaped_awx.plugin\n"
+        "untaped_awx.plugin.plugin.manifest()\n"
+        "loaded = [m for m in sys.modules if m.startswith('untaped_awx.cli')]\n"
+        "assert not loaded, f'CLI modules imported eagerly: {loaded}'\n"
+        "assert untaped_awx.app is sys.modules['untaped_awx.cli'].app\n"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)
 
 
 def test_config_list_includes_registered_awx_settings() -> None:

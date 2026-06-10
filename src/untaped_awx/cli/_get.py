@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from typing import Annotated, Any
 
 from cyclopts import App, Parameter
-from untaped import (
+from untaped.api import (
     ColumnsOption,
     FormatOption,
     OutputFormat,

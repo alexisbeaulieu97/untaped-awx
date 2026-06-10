@@ -9,20 +9,27 @@ the [`untaped` core repo](https://github.com/alexisbeaulieu97/untaped).
 
 `AwxConfig` (`infrastructure/config.py`) is the package-local config struct
 (`base_url`, `token`, `api_prefix`, `default_organization`, `page_size`).
-The plugin registers this model as the `awx` profile settings section, and
-CLI composition roots read it with `get_config_section("awx", AwxConfig)`.
+The plugin manifest declares this model as the `awx` profile settings
+section, and the CLI composition root (`cli/_context.py`) reads it with
+`plugin_context(profile).section("awx", AwxConfig)`.
 Plugin registration and CLI composition roots may import `AwxConfig`;
 infrastructure clients receive it as package-local configuration. Domain and
 application code stay config-free and depend on narrow models/ports instead.
-The plugin object also registers the packaged `untaped-awx` agent skill via
-core `SkillSpec`; keep that static skill asset current with major command
+The plugin manifest also contributes the packaged `untaped-awx` agent skill
+via core `SkillSpec`; keep that static skill asset current with major command
 workflow changes. The plugin object must expose `id = "awx"`, literal
-`untaped_api_version = 2`, and `register(registry)`.
+`untaped_api_version = 3`, and `manifest()` returning a core
+`PluginManifest`. The manifest's `CliSpec` defers the CLI via
+`import_path="untaped_awx.cli:app"`, and the package `__init__` re-exports
+`app` through a lazy PEP 562 `__getattr__` — neither `plugin.py` nor
+`untaped_awx/__init__.py` may import the CLI tree eagerly (pinned by
+`test_plugin_import_keeps_cli_module_off_the_startup_path`). Plugins import
+the SDK surface from `untaped.api`, never from core internals.
 
 AWX commands that read settings expose the core command-local
 `ProfileOverrideOption` as `--profile` and pass it into
-`open_context(profile)`; direct config readers wrap their body in
-`profile_override(profile)`. Commands that do not read settings, such as
+`open_context(profile)`, which resolves a frozen core `PluginContext` via
+`plugin_context(profile)`. Commands that do not read settings, such as
 `awx test list`, do not expose a no-op profile selector.
 
 Adding a new field is a three-place edit: `AwxConfig`, the call site that

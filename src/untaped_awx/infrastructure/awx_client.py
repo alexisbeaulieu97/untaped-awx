@@ -10,8 +10,7 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Any
 
-from untaped import ConfigError, HttpClient, HttpSettings
-from untaped.http import resolve_verify
+from untaped.api import HttpSettings, connected_client
 
 from untaped_awx.infrastructure.config import AwxConfig
 
@@ -20,18 +19,15 @@ class AwxClient:
     """Talks to AAP/AWX REST endpoints using the configured token."""
 
     def __init__(self, config: AwxConfig, *, http: HttpSettings | None = None) -> None:
-        if not config.base_url:
-            raise ConfigError(
-                "awx.base_url is not configured (set it via "
-                "`untaped config set awx.base_url <url>` or UNTAPED_AWX__BASE_URL)"
-            )
-        headers: dict[str, str] = {"Accept": "application/json"}
-        if config.token is not None:
-            headers["Authorization"] = f"Bearer {config.token.get_secret_value()}"
-        self._http = HttpClient(
-            base_url=config.base_url.rstrip("/"),
-            headers=headers,
-            verify=resolve_verify(http or HttpSettings()),
+        # `token` is deliberately not in `required`: a token-less client can
+        # still hit unauthenticated endpoints like `ping/`. When configured,
+        # connected_client turns it into the Bearer header.
+        self._http = connected_client(
+            config,
+            section="awx",
+            required=("base_url",),
+            headers={"Accept": "application/json"},
+            http=http,
         )
         self._api_prefix = config.api_prefix
 
