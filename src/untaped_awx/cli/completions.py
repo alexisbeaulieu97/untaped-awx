@@ -5,15 +5,13 @@ names from a (cached) AWX query. We keep these defensive — completion
 must never raise — so any error returns an empty list.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable, Iterator
 
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
 def names_for(spec: AwxResourceSpec) -> Callable[[str], Iterator[str]]:
-    """Return a Typer ``autocompletion`` callback for ``spec``'s names."""
+    """Return a defensive resource-name completion callback for ``spec``."""
 
     def _complete(incomplete: str) -> Iterator[str]:
         try:

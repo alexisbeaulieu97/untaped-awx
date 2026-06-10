@@ -21,7 +21,7 @@ from untaped_awx.cli._launch import LAUNCH_FLAGS
 def test_launch_flag_rows_are_uniquely_keyed() -> None:
     """No two rows share the same flag *or* the same ``accepts_key``.
 
-    Duplicated ``flag``: a Typer option would shadow the earlier
+    Duplicated ``flag``: one CLI option would shadow the earlier
     declaration. Duplicated ``accepts_key``: the later row silently
     wins in ``_build_launch_payload`` — integration tests would only
     catch this if both flags are exercised with observably different

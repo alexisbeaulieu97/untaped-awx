@@ -97,7 +97,7 @@ JOB_TEMPLATE_SPEC = AwxResourceSpec(
     secret_paths=("webhook_key", "survey_spec.spec.*.default"),
     actions=(
         # ``accepts`` is the public CLI contract: each name listed here
-        # gets a Typer flag wired in `_add_launch`. The CLI dispatches
+        # gets a CLI flag wired in `_add_launch`. The CLI dispatches
         # on membership so every kind's launch surface stays honest.
         ActionSpec(
             name="launch",

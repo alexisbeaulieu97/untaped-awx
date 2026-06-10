@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -18,8 +18,8 @@ else:
 
 
 @pytest.fixture
-def cli() -> CliRunner:
-    return CliRunner()
+def cli() -> CliInvoker:
+    return CliInvoker()
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +48,7 @@ def _write(path: Path, body: str) -> Path:
     return path
 
 
-def test_test_help_lists_subcommands(cli: CliRunner) -> None:
+def test_test_help_lists_subcommands(cli: CliInvoker) -> None:
     result = cli.invoke(app, ["test", "--help"])
     assert result.exit_code == 0, result.output
     out = result.stdout
@@ -58,7 +58,7 @@ def test_test_help_lists_subcommands(cli: CliRunner) -> None:
 
 
 def test_run_against_missing_file_emits_clean_error(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     """A typo'd test path should not leak a Python traceback."""
     missing = tmp_path / "does-not-exist.yml"
@@ -66,13 +66,11 @@ def test_run_against_missing_file_emits_clean_error(
     assert result.exit_code != 0
     combined = (result.stderr or "") + (result.output or "")
     assert "Traceback" not in combined
-    # ``typer.BadParameter`` renders an "Error" box; the precise text wraps
-    # depending on terminal width, so we only assert the user-visible signal.
-    assert "Error" in combined
+    assert "does not exist" in combined
 
 
 def test_run_with_broken_vars_file_emits_clean_error(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
@@ -100,7 +98,7 @@ def test_run_with_broken_vars_file_emits_clean_error(
     assert "Traceback" not in combined
 
 
-def test_run_passes_when_job_succeeds(cli: CliRunner, fake_aap: FakeAap, tmp_path: Path) -> None:
+def test_run_passes_when_job_succeeds(cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
         tmp_path / "smoke.yml",
@@ -122,7 +120,7 @@ def test_run_passes_when_job_succeeds(cli: CliRunner, fake_aap: FakeAap, tmp_pat
 
 
 def test_run_with_disjoint_variables_across_files_succeeds(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     """``--var`` declared by one file but not another must not fail the sibling load."""
     _seed_jt(fake_aap)
@@ -161,7 +159,7 @@ def test_run_with_disjoint_variables_across_files_succeeds(
 
 
 def test_run_against_directory_picks_up_yaml_children(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     """Passing a directory should expand to its ``*.yml`` children."""
     _seed_jt(fake_aap)
@@ -185,7 +183,7 @@ def test_run_against_directory_picks_up_yaml_children(
     assert len(launches) == 2  # one per YAML file
 
 
-def test_run_filters_to_one_case(cli: CliRunner, fake_aap: FakeAap, tmp_path: Path) -> None:
+def test_run_filters_to_one_case(cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
         tmp_path / "matrix.yml",
@@ -205,7 +203,7 @@ def test_run_filters_to_one_case(cli: CliRunner, fake_aap: FakeAap, tmp_path: Pa
 
 
 def test_run_fails_when_required_var_missing(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
@@ -227,7 +225,7 @@ def test_run_fails_when_required_var_missing(
     assert "env" in (result.stderr or result.output)
 
 
-def test_run_uses_var_flag(cli: CliRunner, fake_aap: FakeAap, tmp_path: Path) -> None:
+def test_run_uses_var_flag(cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
         tmp_path / "with_var.yml",
@@ -253,7 +251,7 @@ def test_run_uses_var_flag(cli: CliRunner, fake_aap: FakeAap, tmp_path: Path) ->
 
 
 def test_validate_renders_without_launching(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
@@ -272,7 +270,7 @@ def test_validate_renders_without_launching(
 
 
 def test_fake_aap_next_action_status_is_one_shot(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     """Setting ``next_action_status`` once must not bleed into a second launch."""
     _seed_jt(fake_aap)
@@ -294,7 +292,7 @@ def test_fake_aap_next_action_status_is_one_shot(
 
 
 def test_show_logs_prints_stdout_tail_for_failed_case(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     """``--show-logs`` dumps the AWX stdout tail to stderr on failure."""
     _seed_jt(fake_aap)
@@ -316,7 +314,7 @@ def test_show_logs_prints_stdout_tail_for_failed_case(
 
 
 def test_list_json_includes_variable_metadata(
-    cli: CliRunner, fake_aap: FakeAap, tmp_path: Path
+    cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path
 ) -> None:
     """``list --format json`` must surface declared frontmatter variables."""
     _seed_jt(fake_aap)
@@ -350,7 +348,7 @@ def test_list_json_includes_variable_metadata(
     assert parsed[0]["cases"] == ["c"]
 
 
-def test_list_dumps_cases_in_json(cli: CliRunner, fake_aap: FakeAap, tmp_path: Path) -> None:
+def test_list_dumps_cases_in_json(cli: CliInvoker, fake_aap: FakeAap, tmp_path: Path) -> None:
     _seed_jt(fake_aap)
     test_file = _write(
         tmp_path / "list.yml",

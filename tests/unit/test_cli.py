@@ -4,8 +4,8 @@ from pathlib import Path
 import httpx
 import pytest
 import respx
-from typer.testing import CliRunner
 from untaped.settings import get_settings
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -55,7 +55,7 @@ def test_ping_uses_configured_api_prefix(
                 json={"version": "4.5.0", "active_node": "controller-1"},
             )
         )
-        result = CliRunner().invoke(app, ["ping", "--format", "raw", "--columns", "version"])
+        result = CliInvoker().invoke(app, ["ping", "--format", "raw", "--columns", "version"])
 
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == "4.5.0"
@@ -88,7 +88,7 @@ def test_ping_table_honours_global_ui_collection_view(
                 json={"version": "4.5.0", "active_node": "controller-1"},
             )
         )
-        result = CliRunner().invoke(app, ["ping", "--format", "table"])
+        result = CliInvoker().invoke(app, ["ping", "--format", "table"])
 
     assert result.exit_code == 0, result.output
     assert "version: 4.5.0" in result.stdout
@@ -126,7 +126,7 @@ def test_ping_profile_flag_reads_named_profile(
                 json={"version": "4.5.0", "active_node": "controller-1"},
             )
         )
-        result = CliRunner().invoke(
+        result = CliInvoker().invoke(
             app,
             ["ping", "--profile", "stage", "--format", "raw", "--columns", "version"],
         )
@@ -137,7 +137,7 @@ def test_ping_profile_flag_reads_named_profile(
 
 def test_ping_requires_base_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UNTAPED_CONFIG", str(tmp_path / "missing.yml"))
-    result = CliRunner().invoke(app, ["ping"])
+    result = CliInvoker().invoke(app, ["ping"])
     assert result.exit_code != 0
     assert "base_url" in str(result.exception) or "base_url" in result.output
 
@@ -184,7 +184,7 @@ def test_list_does_not_auto_apply_default_organization(
     }.get(cli_name, cli_name)
     with respx.mock(base_url="https://aap.example.com") as mock:
         mock.get(f"/api/v2/{api_path}/").mock(side_effect=_record)
-        result = CliRunner().invoke(app, [cli_name, "list", "--format", "raw"])
+        result = CliInvoker().invoke(app, [cli_name, "list", "--format", "raw"])
 
     assert result.exit_code == 0, result.output
     assert captured, "no request captured"
@@ -219,7 +219,7 @@ def test_list_filter_passes_through_to_awx(tmp_path: Path, monkeypatch: pytest.M
 
     with respx.mock(base_url="https://aap.example.com") as mock:
         mock.get("/api/v2/job_templates/").mock(side_effect=_record)
-        result = CliRunner().invoke(
+        result = CliInvoker().invoke(
             app,
             [
                 "job-templates",
@@ -258,7 +258,7 @@ def test_list_filter_rejects_malformed_entry(
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
 
-    result = CliRunner().invoke(app, ["job-templates", "list", "--filter", "bogus"])
+    result = CliInvoker().invoke(app, ["job-templates", "list", "--filter", "bogus"])
     assert result.exit_code != 0
     output = result.output + (result.stderr or "")
     assert "KEY=VALUE" in output
@@ -268,7 +268,7 @@ def test_apply_help_advertises_parallel() -> None:
     """The top-level ``awx apply`` exposes ``--parallel / -j`` so users
     can speed up directory applies. Surface check only; behaviour is
     covered by the ``ApplyFile`` unit tests."""
-    result = CliRunner().invoke(app, ["apply", "--help"])
+    result = CliInvoker().invoke(app, ["apply", "--help"])
     assert result.exit_code == 0
     assert "--parallel" in result.output
     assert "-j" in result.output
@@ -278,7 +278,7 @@ def test_per_kind_apply_help_advertises_parallel() -> None:
     """Per-resource sub-apps' ``apply`` (e.g. ``awx projects apply``)
     must also expose ``--parallel / -j`` — the per-kind path routes
     through the same ``run_apply`` composition root."""
-    result = CliRunner().invoke(app, ["projects", "apply", "--help"])
+    result = CliInvoker().invoke(app, ["projects", "apply", "--help"])
     assert result.exit_code == 0
     assert "--parallel" in result.output
     assert "-j" in result.output
@@ -295,7 +295,7 @@ def test_apply_emits_clamp_warning_above_cap(
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
     yml = tmp_path / "empty.yml"
     yml.write_text("")  # zero docs → no AWX calls, runner just prints rows
-    result = CliRunner().invoke(app, ["apply", str(yml), "--parallel", "100"])
+    result = CliInvoker().invoke(app, ["apply", str(yml), "--parallel", "100"])
     assert result.exit_code == 0, result.output
     assert "clamped to 10" in result.output
     assert "httpx.Limits.max_connections=10" in result.output
@@ -319,7 +319,7 @@ def test_apply_accepts_positional_file(
     yml = tmp_path / "empty.yml"
     yml.write_text("")
     args = [str(yml) if a == "FILE" else a for a in template]
-    result = CliRunner().invoke(app, args)
+    result = CliInvoker().invoke(app, args)
     assert result.exit_code == 0, result.output
 
 
@@ -342,9 +342,9 @@ def test_apply_rejects_removed_file_alias(
     yml = tmp_path / "empty.yml"
     yml.write_text("")
     args = [str(yml) if a == "FILE" else a for a in args_template]
-    result = CliRunner().invoke(app, args)
-    assert result.exit_code == 2
-    assert "No such option" in result.output
+    result = CliInvoker().invoke(app, args)
+    assert result.exit_code != 0
+    assert "--file" in result.output or "-f" in result.output
 
 
 @pytest.mark.parametrize("cmd", [["apply"], ["job-templates", "apply"]])
@@ -352,7 +352,7 @@ def test_apply_bare_invocation_shows_help(cmd: list[str]) -> None:
     """Bare ``apply`` shows help via ``no_args_is_help`` (exit 2 — same
     convention as ``workspace path`` / ``workspace add``), not a
     missing-argument traceback."""
-    result = CliRunner().invoke(app, cmd)
+    result = CliInvoker().invoke(app, cmd)
     assert result.exit_code == 2
     assert "Usage:" in result.output
     assert "Missing option" not in result.output
@@ -360,7 +360,8 @@ def test_apply_bare_invocation_shows_help(cmd: list[str]) -> None:
 
 @pytest.mark.parametrize("cmd", [["apply", "--help"], ["job-templates", "apply", "--help"]])
 def test_apply_help_synopsis_shows_file_positional(cmd: list[str]) -> None:
-    """The synopsis must advertise ``FILE`` as a positional."""
-    result = CliRunner().invoke(app, cmd)
+    """The help must describe positional file input without reviving ``--file``."""
+    result = CliInvoker().invoke(app, cmd)
     assert result.exit_code == 0
-    assert "FILE" in result.output
+    assert "YAML file" in result.output
+    assert "--file" not in result.output

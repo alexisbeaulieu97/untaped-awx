@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -60,7 +60,7 @@ def test_apply_preview_does_not_write(fake_aap: Any, tmp_path: Path) -> None:
         "  project: playbooks\n"
         "  inventory: prod\n"
     )
-    result = CliRunner().invoke(app, ["job-templates", "apply", str(f)])
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(f)])
     assert result.exit_code == 0, result.output
     # State on the server is unchanged because we didn't pass --yes.
     jt = fake_aap.get_record("job_templates", 30)
@@ -87,7 +87,7 @@ def test_apply_under_scoped_file_raises_ambiguity(fake_aap: Any, tmp_path: Path)
         "  project: playbooks\n"
         "  inventory: prod\n"
     )
-    result = CliRunner().invoke(app, ["job-templates", "apply", str(f), "--yes"])
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(f), "--yes"])
     output = result.output + (result.stderr or "")
     assert result.exit_code != 0, output
     assert "ambiguous" in output.lower(), output
@@ -105,7 +105,7 @@ def test_apply_yes_writes_changes(fake_aap: Any, tmp_path: Path) -> None:
         "  project: playbooks\n"
         "  inventory: prod\n"
     )
-    result = CliRunner().invoke(app, ["job-templates", "apply", str(f), "--yes"])
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(f), "--yes"])
     assert result.exit_code == 0, result.output
     jt = fake_aap.get_record("job_templates", 30)
     assert jt["description"] == "changed-via-apply"
@@ -127,7 +127,7 @@ def test_per_resource_apply_rejects_wrong_kind_before_writing(
         "metadata: { name: playbooks, organization: Default }\n"
         "spec: { scm_type: hg, scm_url: 'https://elsewhere/x.git' }\n"
     )
-    result = CliRunner().invoke(app, ["job-templates", "apply", str(f), "--yes"])
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(f), "--yes"])
     assert result.exit_code == 0, result.output
     # JT got patched
     jt = fake_aap.get_record("job_templates", 30)
@@ -148,7 +148,7 @@ def test_apply_creates_when_missing(seeded_default_org: Any, tmp_path: Path) -> 
         "  scm_type: git\n"
         "  scm_url: https://example.com/x.git\n"
     )
-    result = CliRunner().invoke(app, ["projects", "apply", str(f), "--yes"])
+    result = CliInvoker().invoke(app, ["projects", "apply", str(f), "--yes"])
     assert result.exit_code == 0, result.output
     new_proj = next(
         r for r in seeded_default_org.list_records("projects") if r["name"] == "new-proj"
@@ -170,7 +170,7 @@ def test_apply_preserves_encrypted_secret(fake_aap: Any, tmp_path: Path) -> None
         "  inventory: prod\n"
         "  webhook_key: $encrypted$\n"
     )
-    result = CliRunner().invoke(app, ["job-templates", "apply", str(f), "--yes"])
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(f), "--yes"])
     assert result.exit_code == 0, result.output
     jt = fake_aap.get_record("job_templates", 30)
     assert jt["webhook_key"] == "$encrypted$"  # untouched

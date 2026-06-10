@@ -17,7 +17,7 @@ application code stay config-free and depend on narrow models/ports instead.
 The plugin object also registers the packaged `untaped-awx` agent skill via
 core `SkillSpec`; keep that static skill asset current with major command
 workflow changes. The plugin object must expose `id = "awx"`, literal
-`untaped_api_version = 1`, and `register(registry)`.
+`untaped_api_version = 2`, and `register(registry)`.
 
 AWX commands that read settings expose the core command-local
 `ProfileOverrideOption` as `--profile` and pass it into
@@ -58,14 +58,14 @@ credential, schedule, host, group, _support}.py` and are aggregated into
 `ALL_SPECS`. **Spec fields stay honest with the CLI:** a knob only lives in
 the spec if the factory actually wires it. The launch parser
 (`cli/_launch._add_launch`) enforces this structurally — each
-flag whose payload field isn't in the kind's `ActionSpec.accepts` is
-passed `Option(hidden=True)` so it's omitted from `--help` while still
+flag whose payload field isn't in the kind's `ActionSpec.accepts` uses
+`Parameter(show=False)` so it's omitted from `--help` while still
 being parseable (the runtime guard `_reject_unsupported_launch_flags`
 catches a user who passes a hidden flag anyway). The flag→payload-field
 mapping, the visibility check, and the value translation all flow
 through one table — `LAUNCH_FLAGS: tuple[LaunchFlag, ...]` in
 `cli/_launch.py`. Adding a ninth launch flag is two edits:
-one Typer `Option(..., hidden=hidden_by_flag["--nine"])` in
+one Cyclopts `Parameter(..., show=not hidden_by_flag["--nine"])` in
 `_add_launch`'s signature and one `LaunchFlag` row in the table
 (flag name + `ActionSpec.accepts` key + a `payload_builder` closure
 for the CLI-value-to-AAP-field translation). The three downstream
@@ -216,7 +216,7 @@ The same write path is also exposed directly via spec-driven
 `<parent> <sub_endpoint> add/remove` subcommands (`cli/membership_commands.py`)
 for additive, sync-free use (e.g. `groups hosts add prod-web --stdin`).
 `make_resource_app` walks each spec's `FkRef(multi=True, sub_endpoint=…)`
-and attaches a nested Typer sub-app via `register_membership_subapp`, so
+and attaches a nested Cyclopts sub-app via `register_membership_subapp`, so
 new multi-FK refs light up these subcommands for free.
 `application/manage_membership.py` calls
 `MembershipReconciler.post_members` directly with a `disassociate=bool`

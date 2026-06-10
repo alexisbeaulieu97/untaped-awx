@@ -10,14 +10,11 @@ This module is the **only** place in ``untaped-awx`` that reads
 package-local :class:`AwxConfig`.
 """
 
-from __future__ import annotations
-
 from contextlib import contextmanager
 from types import TracebackType
 from typing import TYPE_CHECKING
 
-import typer
-from untaped import get_config_section, get_core_settings, profile_override
+from untaped import echo, get_config_section, get_core_settings, profile_override
 
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.infrastructure import AwxClient, AwxConfig, AwxResourceCatalog
@@ -45,7 +42,7 @@ class AwxContext:
         self.fk = FkResolver(
             self.repo,
             self.catalog,
-            warn=lambda msg: typer.echo(f"warning: {msg}", err=True),
+            warn=lambda msg: echo(f"warning: {msg}", err=True),
         )
         self.strategies = StaticStrategyResolver()
         self.monitor = PollingJobMonitor(self.repo)
@@ -89,7 +86,7 @@ def scope_for_command(
 ) -> dict[str, str] | None:
     """Builder-side wrapper around :func:`scope_for_spec`.
 
-    Hoists ``ctx.default_organization`` out of every Typer command body
+    Hoists ``ctx.default_organization`` out of every Cyclopts command body
     so each builder calls a three-arg helper rather than the five-arg
     form. Pure pass-through — every CLI module in ``cli/`` uses this;
     ``scope_for_spec`` stays for the application layer's

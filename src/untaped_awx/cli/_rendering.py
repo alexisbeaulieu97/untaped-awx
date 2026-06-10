@@ -1,7 +1,5 @@
 """AWX-local row rendering boundary."""
 
-from __future__ import annotations
-
 from collections.abc import Sequence
 
 from untaped import OutputFormat, UiContext, ui_context

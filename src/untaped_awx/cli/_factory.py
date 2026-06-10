@@ -1,6 +1,6 @@
-"""Factory for per-resource Typer sub-apps.
+"""Factory for per-resource Cyclopts sub-apps.
 
-``make_resource_app(spec)`` builds the Typer sub-app for a single
+``make_resource_app(spec)`` builds the Cyclopts sub-app for a single
 ``ResourceSpec`` by dispatching the spec's ``commands`` tuple and
 ``actions`` list to per-command builders defined in sibling modules
 (``_list.py``, ``_get.py``, …). The ``ACTION_BUILDERS`` registry maps
@@ -8,11 +8,10 @@
 without editing the factory body.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
-import typer
+from cyclopts import App
+from untaped import create_app
 
 from untaped_awx.cli._apply import _add_apply
 from untaped_awx.cli._delete import _add_delete
@@ -25,17 +24,12 @@ from untaped_awx.cli.membership_commands import register_membership_subapp
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def make_resource_app(spec: AwxResourceSpec) -> typer.Typer:
-    """Build the Typer sub-app for a single kind based on ``spec.commands``."""
-    app = typer.Typer(
+def make_resource_app(spec: AwxResourceSpec) -> App:
+    """Build the Cyclopts sub-app for a single kind based on ``spec.commands``."""
+    app = create_app(
         name=spec.cli_name,
         help=f"Manage {spec.kind} resources.",
-        no_args_is_help=True,
     )
-
-    @app.callback()
-    def _callback() -> None:
-        """Sub-app dispatcher."""
 
     if "list" in spec.commands:
         _add_list(app, spec)
@@ -64,7 +58,7 @@ def make_resource_app(spec: AwxResourceSpec) -> typer.Typer:
 # ``_add_<action>(app, spec)`` builder in its own sibling module, and
 # (3) register it here. :func:`make_resource_app` itself stays
 # untouched as new actions are added.
-ACTION_BUILDERS: dict[str, Callable[[typer.Typer, AwxResourceSpec], None]] = {
+ACTION_BUILDERS: dict[str, Callable[[App, AwxResourceSpec], None]] = {
     "launch": _add_launch,
     "update": _add_update,
 }

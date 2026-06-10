@@ -1,7 +1,5 @@
 """Replace FK ids in result rows with names from ``summary_fields``."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:

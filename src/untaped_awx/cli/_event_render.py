@@ -20,8 +20,6 @@ a TUI:
       failed: api-01
 """
 
-from __future__ import annotations
-
 from rich.text import Text
 
 from untaped_awx.domain import JobEvent

@@ -7,13 +7,10 @@ application-layer :class:`ApplyFile` use case (which only sees a
 ``ResourceDocumentReader`` Protocol).
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from pathlib import Path
 
-import typer
-from untaped import OutputFormat, clamp_parallel
+from untaped import OutputFormat, clamp_parallel, echo, raise_usage
 
 from untaped_awx.application import ApplyFile, ApplyResource
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
@@ -39,7 +36,7 @@ def run_apply(
 ) -> None:
     """End-to-end apply for one CLI invocation. Writes to stdout/stderr."""
     if parallel < 1:
-        raise typer.BadParameter("--parallel must be >= 1")
+        raise_usage("--parallel must be >= 1")
     parallel = clamp_parallel(
         parallel, cap=APPLY_PARALLEL_CAP, policy="httpx.Limits.max_connections=10"
     )
@@ -48,13 +45,13 @@ def run_apply(
     outcomes = ApplyFile(apply_one, reader, ctx.catalog, ctx.fk, parallel=parallel)(
         file, write=write, fail_fast=fail_fast
     )
-    typer.echo(render_rows(outcome_rows(outcomes), fmt=fmt, columns=columns))
+    echo(render_rows(outcome_rows(outcomes), fmt=fmt, columns=columns))
     if not write:
         for outcome in outcomes:
             for line in diff_lines(outcome):
-                typer.echo(line, err=True)
+                echo(line, err=True)
     if any(o.action == "failed" for o in outcomes):
-        raise typer.Exit(code=1)
+        raise SystemExit(1)
 
 
 def _make_reader(*, kind_filter: str | None, cli_name: str | None) -> ResourceDocumentReader:
@@ -68,7 +65,7 @@ def _make_reader(*, kind_filter: str | None, cli_name: str | None) -> ResourceDo
         if wrong:
             unique = sorted({d.kind for d in wrong})
             label = cli_name or kind_filter
-            typer.echo(
+            echo(
                 f"warning: {len(wrong)} doc(s) skipped — wrong kind for "
                 f"{label} ({{{','.join(unique)}}})",
                 err=True,
@@ -80,7 +77,7 @@ def _make_reader(*, kind_filter: str | None, cli_name: str | None) -> ResourceDo
 
 def _build_apply_resource(ctx: AwxContext) -> ApplyResource:
     def _warn(msg: str) -> None:
-        typer.echo(f"warning: {msg}", err=True)
+        echo(f"warning: {msg}", err=True)
 
     return ApplyResource(
         client=ctx.repo,

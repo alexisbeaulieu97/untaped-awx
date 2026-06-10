@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 import yaml
-from typer.testing import CliRunner
 from untaped.settings import get_settings
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -58,7 +58,7 @@ def _flag_in_help(flag: str, help_text: str) -> bool:
 
 def test_job_templates_list(fake_aap: Any) -> None:
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "list", "--format", "raw", "--columns", "name"],
     )
@@ -85,7 +85,7 @@ def test_job_templates_list_table_honours_global_ui_collection_view(
     get_settings.cache_clear()
     _seed_basic(fake_aap)
 
-    result = CliRunner().invoke(app, ["job-templates", "list", "--format", "table"])
+    result = CliInvoker().invoke(app, ["job-templates", "list", "--format", "table"])
 
     assert result.exit_code == 0, result.output
     assert "id: 30" in result.stdout
@@ -112,7 +112,7 @@ def test_job_templates_list_raw_ignores_unknown_global_ui_theme(
     get_settings.cache_clear()
     _seed_basic(fake_aap)
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "list", "--format", "raw", "--columns", "name"],
     )
@@ -144,7 +144,7 @@ def test_job_templates_list_profile_flag_reads_named_profile(
     )
     _seed_basic(fake_aap)
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -200,7 +200,7 @@ def test_list_with_names_flips_fk_ids_to_names(seeded_default_org: Any) -> None:
             "inventory": {"id": 20, "name": "prod"},
         },
     )
-    raw_default = CliRunner().invoke(
+    raw_default = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -216,7 +216,7 @@ def test_list_with_names_flips_fk_ids_to_names(seeded_default_org: Any) -> None:
     assert raw_default.exit_code == 0, raw_default.output
     assert raw_default.stdout.strip() == "10\t20"
 
-    raw_named = CliRunner().invoke(
+    raw_named = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -258,7 +258,7 @@ def test_list_with_names_handles_multi_fk(seeded_default_org: Any) -> None:
             ],
         },
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -287,7 +287,7 @@ def test_list_with_names_falls_back_to_id_when_summary_missing(seeded_default_or
         playbook="a.yml",
         # No summary_fields seeded.
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -316,7 +316,7 @@ def test_list_dotted_columns_resolve_summary_fields(seeded_default_org: Any) -> 
         project=20,
         summary_fields={"project": {"id": 20, "name": "playbooks"}},
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -338,7 +338,7 @@ def test_get_format_table_defaults_to_list_columns(fake_aap: Any) -> None:
     spec's list_columns. Rendering the full AWX record (50+ fields with
     nested dicts stringified) is unreadable noise."""
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "get", "deploy", "--organization", "Default", "--format", "table"],
     )
@@ -355,7 +355,7 @@ def test_get_format_raw_keeps_first_key_default(fake_aap: Any) -> None:
     the row renderer's first-key behavior so pipelines like
     ``get --stdin --format raw | …`` retain their established shape."""
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "get", "deploy", "--organization", "Default", "--format", "raw"],
     )
@@ -374,7 +374,7 @@ def test_get_with_names_translates_fks(fake_aap: Any) -> None:
         "project": {"id": 10, "name": "playbooks"},
         "inventory": {"id": 20, "name": "prod"},
     }
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -395,7 +395,7 @@ def test_get_with_names_translates_fks(fake_aap: Any) -> None:
 
 def test_job_templates_get(fake_aap: Any) -> None:
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -422,7 +422,7 @@ def test_get_accepts_multiple_positional_names(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=11, name="beta", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "get", "alpha", "beta", "--format", "raw", "--columns", "name"]
     )
     assert result.exit_code == 0, result.output
@@ -439,7 +439,7 @@ def test_get_reads_names_from_stdin(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=11, name="beta", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "get", "--stdin", "--format", "raw", "--columns", "name"],
         input="alpha\nbeta\n",
@@ -463,7 +463,7 @@ def test_get_by_id_accepts_numeric_id_positional(seeded_default_org: Any) -> Non
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "get", "--by-id", "10", "--format", "raw", "--columns", "name"],
     )
@@ -476,7 +476,7 @@ def test_get_treats_unicode_non_decimal_digit_as_name(seeded_default_org: Any) -
     Those identifiers must take the name-lookup path so the user sees a
     clean ``error: <id>: not found`` (or a hit on a literally-named
     resource) instead of an unhandled ``ValueError`` traceback."""
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "get", "²", "--organization", "Default", "--format", "raw"],
     )
@@ -506,7 +506,7 @@ def test_get_defaults_to_name_lookup_for_all_digit_names(seeded_default_org: Any
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "projects",
@@ -538,7 +538,7 @@ def test_get_by_id_ignores_organization_scope(fake_aap: Any) -> None:
         organization_name="Org-B",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "projects",
@@ -575,7 +575,7 @@ def test_get_stdin_defaults_to_name_lookup_for_all_lines(seeded_default_org: Any
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "projects",
@@ -604,7 +604,7 @@ def test_get_stdin_by_id_rejects_non_numeric_lines(seeded_default_org: Any) -> N
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "get", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="10\nops\n",
@@ -633,7 +633,7 @@ def test_get_batches_default_to_all_names(seeded_default_org: Any) -> None:
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "projects",
@@ -664,7 +664,7 @@ def test_get_by_missing_id_reports_error(seeded_default_org: Any) -> None:
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "get", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="10\n9999\n",
@@ -680,7 +680,7 @@ def test_get_rejects_mixed_positional_and_stdin(seeded_default_org: Any) -> None
     seeded_default_org.seed(
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(app, ["job-templates", "get", "alpha", "--stdin"], input="beta\n")
+    result = CliInvoker().invoke(app, ["job-templates", "get", "alpha", "--stdin"], input="beta\n")
     assert result.exit_code != 0
     # Confirm the failure is the intentional mutually-exclusive rejection,
     # not a crash bubbling up an unrelated exception.
@@ -697,7 +697,7 @@ def test_list_reads_names_from_stdin(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=11, name="beta", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "list", "--stdin", "--format", "raw", "--columns", "name"],
         input="alpha\nbeta\n",
@@ -725,7 +725,7 @@ def test_list_stdin_by_id_reads_ids(seeded_default_org: Any) -> None:
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "list", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="10\n11\n",
@@ -743,7 +743,7 @@ def test_list_stdin_all_failed_exits_one_and_suppresses_empty_stdout(
     ``[]`` would be redundant noise for the all-failed batch. The
     non-stdin path still emits ``[]`` (pinned by
     ``test_list_empty_result_still_renders_in_non_stdin_mode``)."""
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "list", "--stdin", "--format", "json"],
         input="missing-a\nmissing-b\n",
@@ -761,7 +761,7 @@ def test_list_empty_result_still_renders_in_non_stdin_mode(seeded_default_org: A
     don't break on no-result queries. The ``--stdin`` path is the only
     one allowed to suppress empty stdout (its per-id errors went to
     stderr)."""
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "list", "--filter", "name=does-not-exist", "--format", "json"],
     )
@@ -772,7 +772,7 @@ def test_list_empty_result_still_renders_in_non_stdin_mode(seeded_default_org: A
 def test_list_stdin_empty_errors(seeded_default_org: Any) -> None:
     """An empty stdin under `--stdin` must error rather than silently
     no-op (consistent with the `read_identifiers` empty-input contract)."""
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "list", "--stdin"],
         input="",
@@ -788,7 +788,7 @@ def test_list_stdin_empty_errors(seeded_default_org: Any) -> None:
 def test_list_stdin_rejects_server_filter_flags(seeded_default_org: Any, extra: list[str]) -> None:
     """`--stdin` is identifier-based lookup; server filtering knobs are a
     different mode. Combining them is rejected up front."""
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "list", "--stdin", *extra],
         input="alpha\n",
@@ -804,7 +804,7 @@ def test_list_stdin_continues_on_missing_name(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "list", "--stdin", "--format", "raw", "--columns", "name"],
         input="alpha\nghost\n",
@@ -824,7 +824,7 @@ def test_list_stdin_renders_table_format(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=11, name="beta", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "list", "--stdin"],
         input="alpha\nbeta\n",
@@ -859,7 +859,7 @@ def test_list_stdin_with_names_flips_fks(seeded_default_org: Any) -> None:
             "project": {"id": 10, "name": "playbooks"},
         },
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -895,7 +895,7 @@ def test_list_stdin_defaults_to_name_lookup_for_all_lines(seeded_default_org: An
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "projects",
@@ -921,7 +921,7 @@ def test_get_without_scope_raises_when_name_is_ambiguous(fake_aap: Any) -> None:
     fake_aap.seed("job_templates", id=10, name="deploy", organization=1, organization_name="Org-A")
     fake_aap.seed("job_templates", id=11, name="deploy", organization=2, organization_name="Org-B")
 
-    result = CliRunner().invoke(app, ["job-templates", "get", "deploy"])
+    result = CliInvoker().invoke(app, ["job-templates", "get", "deploy"])
     assert result.exit_code != 0
     output = result.output + (result.stderr or "")
     assert "ambiguous" in output.lower(), output
@@ -934,7 +934,7 @@ def test_get_with_scope_resolves_unambiguously(fake_aap: Any) -> None:
     fake_aap.seed("job_templates", id=10, name="deploy", organization=1, organization_name="Org-A")
     fake_aap.seed("job_templates", id=11, name="deploy", organization=2, organization_name="Org-B")
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "get", "deploy", "--organization", "Org-A", "--format", "json"],
     )
@@ -948,7 +948,7 @@ def test_get_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
     fake_aap.seed("job_templates", id=10, name="deploy", organization=1, organization_name="Org-A")
     fake_aap.seed("job_templates", id=11, name="deploy", organization=2, organization_name="Org-B")
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -972,7 +972,7 @@ def test_get_stdin_continues_on_missing_name(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "get", "--stdin", "--format", "raw", "--columns", "name"],
         input="alpha\nghost\n",
@@ -984,7 +984,7 @@ def test_get_stdin_continues_on_missing_name(seeded_default_org: Any) -> None:
 
 
 def test_scope_aliases_are_advertised_on_generated_commands() -> None:
-    runner = CliRunner()
+    runner = CliInvoker()
 
     org_scoped_commands = [
         ["job-templates", "get", "--help"],

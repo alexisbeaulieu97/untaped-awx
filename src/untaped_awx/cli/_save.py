@@ -1,10 +1,9 @@
 """``save`` builder for the spec-driven CLI factory."""
 
-from __future__ import annotations
-
 from pathlib import Path
+from typing import Annotated
 
-import typer
+from cyclopts import App, Parameter
 from untaped import (
     ColumnsOption,
     FormatOption,
@@ -22,13 +21,15 @@ from untaped_awx.cli.options import (
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def _add_save(app: typer.Typer, spec: AwxResourceSpec) -> None:
-    @app.command("save", no_args_is_help=True)
+def _add_save(app: App, spec: AwxResourceSpec) -> None:
+    @app.command(name="save")
     def save_command(
-        name: str = typer.Argument(..., help=f"{spec.kind} name."),
-        output: Path | None = typer.Option(
-            None, "--out", "-o", help="Write to FILE; default is stdout."
-        ),
+        name: Annotated[str, Parameter(help=f"{spec.kind} name.")],
+        *,
+        output: Annotated[
+            Path | None,
+            Parameter(name=["--out", "-o"], help="Write to FILE; default is stdout."),
+        ] = None,
         organization: OrganizationOption = None,
         inventory: InventoryOption = None,
         inventory_organization: InventoryOrganizationOption = None,

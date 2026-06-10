@@ -1,10 +1,9 @@
 """``apply`` builder for the spec-driven CLI factory (per-kind, single file)."""
 
-from __future__ import annotations
-
 from pathlib import Path
+from typing import Annotated
 
-import typer
+from cyclopts import App, Parameter
 from untaped import ColumnsOption, OutputFormat, ProfileOverrideOption, report_errors
 
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
@@ -13,23 +12,31 @@ from untaped_awx.cli._context import open_context
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def _add_apply(app: typer.Typer, spec: AwxResourceSpec) -> None:
-    @app.command("apply", no_args_is_help=True)
+def _add_apply(app: App, spec: AwxResourceSpec) -> None:
+    @app.command(name="apply")
     def apply_command(
-        file: Path = typer.Argument(help="YAML file to apply."),
-        yes: bool = typer.Option(False, "--yes", help="Actually write (default is preview only)."),
-        fail_fast: bool = typer.Option(False, "--fail-fast", help="Abort on first error."),
-        parallel: int = typer.Option(
-            1,
-            "--parallel",
-            "-j",
-            help=(
-                "Concurrent doc writes within this kind. Phase 2 (membership) "
-                f"stays serial. Capped at {APPLY_PARALLEL_CAP} "
-                "(matches the HTTP connection pool default)."
+        file: Annotated[Path | None, Parameter(name="", help="YAML file to apply.")] = None,
+        *,
+        yes: Annotated[
+            bool,
+            Parameter(name="--yes", negative="", help="Actually write (default is preview only)."),
+        ] = False,
+        fail_fast: Annotated[
+            bool,
+            Parameter(name="--fail-fast", negative="", help="Abort on first error."),
+        ] = False,
+        parallel: Annotated[
+            int,
+            Parameter(
+                name=["--parallel", "-j"],
+                help=(
+                    "Concurrent doc writes within this kind. Phase 2 (membership) "
+                    f"stays serial. Capped at {APPLY_PARALLEL_CAP} "
+                    "(matches the HTTP connection pool default)."
+                ),
             ),
-        ),
-        fmt: OutputFormat = typer.Option("table", "--format", help="Output format."),
+        ] = 1,
+        fmt: Annotated[OutputFormat, Parameter(name="--format", help="Output format.")] = "table",
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
     ) -> None:
@@ -38,6 +45,9 @@ def _add_apply(app: typer.Typer, spec: AwxResourceSpec) -> None:
         Wrong-kind docs in the file are warned about and **never written** —
         this command is scoped to the kind of its parent sub-app.
         """
+        if file is None:
+            app.help_print(["apply"])
+            raise SystemExit(2)
         with report_errors(), open_context(profile) as ctx:
             run_apply(
                 ctx,

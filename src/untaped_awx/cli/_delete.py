@@ -1,17 +1,17 @@
 """``delete`` builder for the spec-driven CLI factory."""
 
-from __future__ import annotations
-
 import sys
-from typing import Any
+from typing import Annotated, Any
 
-import typer
+from cyclopts import App, Parameter
 from untaped import (
     ColumnsOption,
     ConfigError,
     FormatOption,
     ProfileOverrideOption,
     UntapedError,
+    echo,
+    raise_usage,
     read_identifiers,
     report_errors,
     resolve_each,
@@ -31,17 +31,27 @@ from untaped_awx.cli.options import (
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
-    @app.command("delete", no_args_is_help=True)
+def _add_delete(app: App, spec: AwxResourceSpec) -> None:
+    @app.command(name="delete")
     def delete_command(
-        names: list[str] | None = typer.Argument(None, help=f"{spec.kind} name(s)."),
-        stdin: bool = typer.Option(False, "--stdin", help="Read names from stdin (one per line)."),
-        yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
-        dry_run: bool = typer.Option(
-            False,
-            "--dry-run",
-            help="Resolve targets and print what would be deleted; don't call DELETE.",
-        ),
+        names: Annotated[list[str] | None, Parameter(help=f"{spec.kind} name(s).")] = None,
+        *,
+        stdin: Annotated[
+            bool,
+            Parameter(name="--stdin", negative="", help="Read names from stdin (one per line)."),
+        ] = False,
+        yes: Annotated[
+            bool,
+            Parameter(name=["--yes", "-y"], negative="", help="Skip the confirmation prompt."),
+        ] = False,
+        dry_run: Annotated[
+            bool,
+            Parameter(
+                name="--dry-run",
+                negative="",
+                help="Resolve targets and print what would be deleted; don't call DELETE.",
+            ),
+        ] = False,
         organization: OrganizationLookupOption = None,
         inventory: InventoryLookupOption = None,
         inventory_organization: InventoryOrganizationOption = None,
@@ -59,10 +69,11 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
         first key is ``id``, so ``--format raw`` returns the deleted ids
         for downstream pipelines.
         """
+        if not names and not stdin:
+            app.help_print(["delete"])
+            raise SystemExit(2)
         if stdin and not yes and not dry_run:
-            raise typer.BadParameter(
-                "--stdin requires --yes (skip confirmation) or --dry-run (preview only)"
-            )
+            raise_usage("--stdin requires --yes (skip confirmation) or --dry-run (preview only)")
         rows: list[dict[str, Any]] = []
         with report_errors(), open_context(profile) as ctx:
             ids = read_identifiers(list(names or []), stdin=stdin)
@@ -104,12 +115,12 @@ def _add_delete(app: typer.Typer, spec: AwxResourceSpec) -> None:
                         deleter(spec, int(record["id"]))
                         rows.append(_delete_row(record, deleted=True))
                     except UntapedError as exc:
-                        typer.echo(f"error: {identifier}: {exc}", err=True)
+                        echo(f"error: {identifier}: {exc}", err=True)
                         any_failed = True
         if rows:
-            typer.echo(render_rows(rows, fmt=fmt, columns=columns))
+            echo(render_rows(rows, fmt=fmt, columns=columns))
         if any_failed:
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
 
 def _resolve_for_delete(
@@ -165,9 +176,9 @@ def _confirm_delete(
         return True
     if not _stdin_is_interactive():
         raise ConfigError("awx delete requires --yes when stdin is not interactive")
-    typer.echo(f"About to delete {len(resolved)} {spec.kind}(s):", err=True)
+    echo(f"About to delete {len(resolved)} {spec.kind}(s):", err=True)
     for _, record in resolved:
-        typer.echo(f"  - {record.get('id')}\t{record.get('name', '')}", err=True)
+        echo(f"  - {record.get('id')}\t{record.get('name', '')}", err=True)
     return ui_context(strict=False).confirm("Continue?")
 
 
