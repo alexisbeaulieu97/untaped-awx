@@ -11,6 +11,7 @@ from untaped import (
     parse_kv_pairs,
     raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
     resolve_each,
 )
@@ -18,7 +19,6 @@ from untaped import (
 from untaped_awx.application import GetResource, ListResources
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryOrganizationOption,

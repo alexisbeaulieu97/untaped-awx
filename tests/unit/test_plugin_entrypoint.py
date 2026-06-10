@@ -47,14 +47,11 @@ def test_awx_plugin_declares_untaped_api_version() -> None:
     assert awx_plugin.untaped_api_version == 2
 
 
-def test_untaped_source_tracks_core_migration_branch_for_pr_stack() -> None:
+def test_untaped_source_tracks_core_default_branch() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     source = data["tool"]["uv"]["sources"]["untaped"]
 
-    assert source == {
-        "git": "https://github.com/alexisbeaulieu97/untaped",
-        "branch": "cyclopts-migration",
-    }
+    assert source == {"git": "https://github.com/alexisbeaulieu97/untaped"}
 
 
 def test_root_app_can_register_awx_plugin() -> None:

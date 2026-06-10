@@ -19,12 +19,12 @@ from untaped import (
     parse_kv_pairs,
     raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
 )
 
 from untaped_awx.application import ListWorkflowNodes
 from untaped_awx.cli._context import open_context, scope_for_command
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.domain import WorkflowNode, WorkflowNodeType
 from untaped_awx.infrastructure.specs.workflow import WORKFLOW_JOB_TEMPLATE_SPEC

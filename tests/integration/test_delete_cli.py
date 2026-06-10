@@ -263,12 +263,12 @@ def test_delete_prompt_requires_yes_when_non_interactive(
     assert 10 in seeded_default_org.store["job_templates"]
 
 
-def test_delete_no_args_prints_help(seeded_default_org: Any) -> None:
-    """Hard Rule #9: no positional args + no --stdin → show help."""
+def test_delete_no_args_is_usage_error(seeded_default_org: Any) -> None:
+    """No positional args + no ``--stdin`` → ``error: provide …`` usage error."""
     result = CliInvoker().invoke(app, ["job-templates", "delete"])
-    # Missing identifiers is a usage error and prints command help.
+    # Missing identifiers is a usage error on stderr, exit 2.
     assert result.exit_code == 2
-    assert "Usage" in result.output
+    assert "error: provide JobTemplate name(s) or --stdin" in result.stderr
 
 
 def test_delete_defaults_to_name_lookup_for_digit_named(

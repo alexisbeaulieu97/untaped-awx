@@ -34,13 +34,13 @@ from untaped import (
     parse_kv_pairs,
     raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
 )
 
 from untaped_awx.application import BrowseUnifiedTemplates, GetUnifiedTemplate
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._get import default_get_columns
-from untaped_awx.cli._rendering import render_rows
 
 app = create_app(
     name="unified-templates",

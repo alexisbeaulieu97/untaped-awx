@@ -13,6 +13,7 @@ from untaped import (
     echo,
     raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
     resolve_each,
     ui_context,
@@ -21,7 +22,6 @@ from untaped import (
 from untaped_awx.application import DeleteResource, GetResource
 from untaped_awx.application.get_resource import parse_resource_id
 from untaped_awx.cli._context import open_context, scope_for_command
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -70,8 +70,7 @@ def _add_delete(app: App, spec: AwxResourceSpec) -> None:
         for downstream pipelines.
         """
         if not names and not stdin:
-            app.help_print(["delete"])
-            raise SystemExit(2)
+            raise_usage(f"provide {spec.kind} name(s) or --stdin")
         if stdin and not yes and not dry_run:
             raise_usage("--stdin requires --yes (skip confirmation) or --dry-run (preview only)")
         rows: list[dict[str, Any]] = []

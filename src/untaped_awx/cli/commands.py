@@ -27,6 +27,7 @@ from untaped import (
     profile_override,
     raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
     resolve_each,
 )
@@ -44,7 +45,6 @@ from untaped_awx.cli._apply_runner import run_apply
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._factory import make_resource_app
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli._save_runner import run_save_batch
 from untaped_awx.cli.options import OrganizationOption
 from untaped_awx.cli.test_commands import app as test_app
@@ -83,7 +83,8 @@ def ping_command(
 
 @app.command(name="apply")
 def apply_command(
-    file: Annotated[Path | None, Parameter(name="", help="YAML file or directory.")] = None,
+    file: Annotated[Path, Parameter(help="YAML file or directory.")],
+    /,
     *,
     yes: Annotated[
         bool,
@@ -113,9 +114,6 @@ def apply_command(
     columns: ColumnsOption = None,
 ) -> None:
     """Apply YAML docs in dependency order. Default = preview; ``--yes`` writes."""
-    if file is None:
-        app.help_print(["apply"])
-        raise SystemExit(2)
     with report_errors(), open_context(profile) as ctx:
         run_apply(
             ctx,

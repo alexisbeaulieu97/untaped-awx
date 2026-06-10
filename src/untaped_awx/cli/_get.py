@@ -15,7 +15,9 @@ from untaped import (
     OutputFormat,
     ProfileOverrideOption,
     echo,
+    raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
     resolve_each,
 )
@@ -23,7 +25,6 @@ from untaped import (
 from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -60,8 +61,7 @@ def _add_get(app: App, spec: AwxResourceSpec) -> None:
     ) -> None:
         """Fetch one or more resources by name, or by explicit AWX id."""
         if not names and not stdin:
-            app.help_print(["get"])
-            raise SystemExit()
+            raise_usage(f"provide {spec.kind} name(s) or --stdin")
         records: list[Any] = []
         any_failed = False
         with report_errors(), open_context(profile) as ctx:

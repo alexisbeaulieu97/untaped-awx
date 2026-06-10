@@ -284,11 +284,11 @@ def test_per_kind_apply_help_advertises_parallel() -> None:
     assert "-j" in result.output
 
 
-def test_get_bare_invocation_shows_help_without_opening_context() -> None:
+def test_get_bare_invocation_is_usage_error_without_opening_context() -> None:
     result = CliInvoker().invoke(app, ["job-templates", "get"])
 
-    assert result.exit_code == 0, result.output
-    assert "Usage:" in result.output
+    assert result.exit_code == 2
+    assert "error: provide JobTemplate name(s) or --stdin" in result.stderr
     assert "awx.base_url" not in result.output
 
 
@@ -367,14 +367,14 @@ def test_apply_rejects_removed_file_alias(
 
 
 @pytest.mark.parametrize("cmd", [["apply"], ["job-templates", "apply"]])
-def test_apply_bare_invocation_shows_help(cmd: list[str]) -> None:
-    """Bare ``apply`` shows help via ``no_args_is_help`` (exit 2 — same
-    convention as ``workspace path`` / ``workspace add``), not a
-    missing-argument traceback."""
+def test_apply_bare_invocation_is_missing_argument_error(cmd: list[str]) -> None:
+    """Bare ``apply`` is a missing-required-positional usage error: exit 2,
+    Cyclopts' ``requires an argument`` message on stderr, nothing on stdout —
+    the suite convention for required positionals."""
     result = CliInvoker().invoke(app, cmd)
     assert result.exit_code == 2
-    assert "Usage:" in result.output
-    assert "Missing option" not in result.output
+    assert "requires an argument" in result.stderr
+    assert result.stdout == ""
 
 
 @pytest.mark.parametrize("cmd", [["apply", "--help"], ["job-templates", "apply", "--help"]])

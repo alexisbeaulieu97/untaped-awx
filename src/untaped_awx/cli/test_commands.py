@@ -13,11 +13,11 @@ from untaped import (
     echo,
     parse_kv_pairs,
     raise_usage,
+    render_rows,
     report_errors,
 )
 
 from untaped_awx.cli._context import AwxContext, open_context
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.domain import Job
 from untaped_awx.domain.test_suite import TestSuite
 from untaped_awx.errors import AwxApiError

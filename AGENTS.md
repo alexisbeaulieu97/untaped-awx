@@ -164,13 +164,13 @@ dropped (paranoid net).
 
 ## CLI row rendering
 
-Collected row-style AWX outputs go through `cli/_rendering.py`'s
-`render_rows`. For `--format table`, it uses core `ui_context()` so
-global `ui:` settings and registered theme plugins affect human
-terminal rendering (for example `ui.collection_view: list`). For
-`json`, `yaml`, and `raw`, it deliberately uses plain `UiContext()` so
-missing or invalid global themes never break structured output or
-pipe-oriented commands.
+Collected row-style AWX outputs go through core `untaped.render_rows`
+(`render_rows(rows, fmt=fmt, columns=columns)`). For `--format table`,
+it uses core `ui_context()` so global `ui:` settings and registered
+theme plugins affect human terminal rendering (for example
+`ui.collection_view: list`). For `json`, `yaml`, and `raw`, it
+deliberately uses plain `UiContext()` so missing or invalid global
+themes never break structured output or pipe-oriented commands.
 
 Do not route non-row output through this helper: direct YAML envelope
 dumps, top-level bulk-save multi-doc streams, stderr warnings/status,

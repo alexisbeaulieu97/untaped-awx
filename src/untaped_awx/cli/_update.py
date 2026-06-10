@@ -8,12 +8,12 @@ from untaped import (
     FormatOption,
     ProfileOverrideOption,
     echo,
+    render_rows,
     report_errors,
 )
 
 from untaped_awx.application import RunAction, WatchJob
 from untaped_awx.cli._context import open_context, scope_for_command
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 

@@ -2,11 +2,10 @@
 
 from pathlib import Path
 
-from untaped import OutputFormat, echo
+from untaped import OutputFormat, echo, render_rows
 
 from untaped_awx.application import SaveResource, SaveResources
 from untaped_awx.cli._context import AwxContext
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.errors import AwxApiError
 from untaped_awx.infrastructure.yaml_io import dump_resource, write_resource

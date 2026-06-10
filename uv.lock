@@ -718,8 +718,8 @@ wheels = [
 
 [[package]]
 name = "untaped"
-version = "0.2.0"
-source = { git = "https://github.com/alexisbeaulieu97/untaped?branch=cyclopts-migration#0d2e61287be09c38c9cf327ecce27315ddf3dbaf" }
+version = "0.3.0"
+source = { git = "https://github.com/alexisbeaulieu97/untaped#9c3ceab9616aa1dddc23e1a14401351170dc9388" }
 dependencies = [
     { name = "cyclopts" },
     { name = "filelock" },
@@ -762,7 +762,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "untaped", git = "https://github.com/alexisbeaulieu97/untaped?branch=cyclopts-migration" },
+    { name = "untaped", git = "https://github.com/alexisbeaulieu97/untaped" },
 ]
 
 [package.metadata.requires-dev]

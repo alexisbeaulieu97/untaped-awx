@@ -15,7 +15,8 @@ from untaped_awx.infrastructure.spec import AwxResourceSpec
 def _add_apply(app: App, spec: AwxResourceSpec) -> None:
     @app.command(name="apply")
     def apply_command(
-        file: Annotated[Path | None, Parameter(name="", help="YAML file to apply.")] = None,
+        file: Annotated[Path, Parameter(help="YAML file to apply.")],
+        /,
         *,
         yes: Annotated[
             bool,
@@ -46,9 +47,6 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
         Wrong-kind docs in the file are warned about and **never written** —
         this command is scoped to the kind of its parent sub-app.
         """
-        if file is None:
-            app.help_print(["apply"])
-            raise SystemExit(2)
         with report_errors(), open_context(profile) as ctx:
             run_apply(
                 ctx,
