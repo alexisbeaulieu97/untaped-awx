@@ -5,18 +5,19 @@ Also owns ``default_get_columns`` — the public helper shared with
 projects records the same way as factory-built ``get``.
 """
 
-from __future__ import annotations
-
 from collections.abc import Sequence
-from typing import Any
+from typing import Annotated, Any
 
-import typer
+from cyclopts import App, Parameter
 from untaped import (
     ColumnsOption,
     FormatOption,
     OutputFormat,
     ProfileOverrideOption,
+    echo,
+    raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
     resolve_each,
 )
@@ -24,7 +25,6 @@ from untaped import (
 from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -34,25 +34,34 @@ from untaped_awx.cli.options import (
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
-    @app.command("get", no_args_is_help=True)
+def _add_get(app: App, spec: AwxResourceSpec) -> None:
+    @app.command(name="get")
     def get_command(
-        names: list[str] | None = typer.Argument(None, help=f"{spec.kind} name(s)."),
-        stdin: bool = typer.Option(False, "--stdin", help="Read names from stdin (one per line)."),
+        names: Annotated[list[str] | None, Parameter(help=f"{spec.kind} name(s).")] = None,
+        *,
+        stdin: Annotated[
+            bool,
+            Parameter(name="--stdin", negative="", help="Read names from stdin (one per line)."),
+        ] = False,
         organization: OrganizationLookupOption = None,
         inventory: InventoryLookupOption = None,
         inventory_organization: InventoryOrganizationOption = None,
         by_id: ByIdOption = False,
-        with_names: bool = typer.Option(
-            False,
-            "--with-names",
-            help="Replace FK ids with names from summary_fields.",
-        ),
+        with_names: Annotated[
+            bool,
+            Parameter(
+                name="--with-names",
+                negative="",
+                help="Replace FK ids with names from summary_fields.",
+            ),
+        ] = False,
         fmt: FormatOption = "yaml",
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
     ) -> None:
         """Fetch one or more resources by name, or by explicit AWX id."""
+        if not names and not stdin:
+            raise_usage(f"provide {spec.kind} name(s) or --stdin")
         records: list[Any] = []
         any_failed = False
         with report_errors(), open_context(profile) as ctx:
@@ -74,9 +83,9 @@ def _add_get(app: typer.Typer, spec: AwxResourceSpec) -> None:
                 # ``cols`` may be ``None`` for non-table formats — that's
                 # fine; ``flatten_fks`` then only flattens declared fk_refs.
                 records = flatten_fks(records, spec, columns=cols)
-            typer.echo(render_rows(records, fmt=fmt, columns=cols))
+            echo(render_rows(records, fmt=fmt, columns=cols))
         if any_failed:
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
 
 def default_get_columns(fmt: OutputFormat, default_cols: Sequence[str]) -> list[str] | None:

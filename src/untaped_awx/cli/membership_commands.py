@@ -2,7 +2,7 @@
 
 For every ``FkRef(multi=True, sub_endpoint=…)`` on a kind's spec, the
 factory loop in :func:`make_resource_app` calls
-:func:`register_membership_subapp` to attach a nested Typer sub-app
+:func:`register_membership_subapp` to attach a nested Cyclopts sub-app
 named after the sub-endpoint with ``add`` and ``remove`` verbs.
 
 Pipeline shape::
@@ -19,12 +19,10 @@ re-removing returns 204), so ``add`` and ``remove`` are safe to run
 repeatedly.
 """
 
-from __future__ import annotations
+from typing import Annotated, Any, Literal
 
-from typing import Any, Literal
-
-import typer
-from untaped import ProfileOverrideOption, read_identifiers, report_errors, resolve_each
+from cyclopts import App, Parameter
+from untaped import ProfileOverrideOption, create_app, read_identifiers, report_errors, resolve_each
 
 from untaped_awx.application import GetResource, ManageMembership
 from untaped_awx.cli._context import open_context, scope_for_command
@@ -38,28 +36,23 @@ from untaped_awx.domain import FkRef
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def register_membership_subapp(parent_app: typer.Typer, spec: AwxResourceSpec, ref: FkRef) -> None:
+def register_membership_subapp(parent_app: App, spec: AwxResourceSpec, ref: FkRef) -> None:
     """Attach ``<ref.sub_endpoint> add/remove`` under ``parent_app``."""
     if not (ref.multi and ref.sub_endpoint and ref.kind):
         return
 
-    sub = typer.Typer(
+    sub = create_app(
         name=ref.sub_endpoint,
         help=f"Manage {ref.kind} membership on {spec.kind}.{ref.field}.",
-        no_args_is_help=True,
     )
-
-    @sub.callback()
-    def _callback() -> None:
-        """Sub-app dispatcher."""
 
     _add_membership_verb(sub, spec, ref, action="associate", verb="add")
     _add_membership_verb(sub, spec, ref, action="disassociate", verb="remove")
-    parent_app.add_typer(sub)
+    parent_app.command(sub)
 
 
 def _add_membership_verb(
-    sub: typer.Typer,
+    sub: App,
     spec: AwxResourceSpec,
     ref: FkRef,
     *,
@@ -70,15 +63,19 @@ def _add_membership_verb(
     verb_doc = "Associate" if action == "associate" else "Disassociate"
     help_text = f"{verb_doc} {ref.kind}(s) {preposition} a {spec.kind}."
 
-    @sub.command(verb, no_args_is_help=True, help=help_text)
+    @sub.command(name=verb, help=help_text)
     def cmd(
-        parent: str = typer.Argument(..., help=f"{spec.kind} name."),
-        members: list[str] | None = typer.Argument(None, help=f"{ref.kind} name(s)."),
-        stdin: bool = typer.Option(
-            False,
-            "--stdin",
-            help="Read member names from stdin (one per line).",
-        ),
+        parent: Annotated[str, Parameter(help=f"{spec.kind} name.")],
+        members: Annotated[list[str] | None, Parameter(help=f"{ref.kind} name(s).")] = None,
+        *,
+        stdin: Annotated[
+            bool,
+            Parameter(
+                name="--stdin",
+                negative="",
+                help="Read member names from stdin (one per line).",
+            ),
+        ] = False,
         by_id: ByIdOption = False,
         organization: OrganizationOption = None,
         inventory: InventoryOption = None,
@@ -117,7 +114,7 @@ def _add_membership_verb(
                 action=action,
             )
         if any_failed:
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
 
 def _member_scope(parent_rec: dict[str, Any], ref: FkRef) -> dict[str, str] | None:

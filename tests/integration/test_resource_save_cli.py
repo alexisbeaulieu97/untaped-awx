@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 import yaml
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 from untaped_awx.domain import Resource
@@ -54,7 +54,7 @@ def _seed_basic(fake: Any) -> None:
 def test_job_templates_save_translates_fks(fake_aap: Any, tmp_path: Path) -> None:
     _seed_basic(fake_aap)
     out = tmp_path / "jt.yml"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -83,7 +83,7 @@ def test_job_templates_save_default_yaml_round_trips(fake_aap: Any) -> None:
     depends on this shape; using row collection rendering for YAML
     would wrap in a top-level list and silently break it."""
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "save", "deploy", "--organization", "Default"]
     )
     assert result.exit_code == 0, result.output
@@ -97,7 +97,7 @@ def test_job_templates_save_format_json_emits_envelope(fake_aap: Any) -> None:
     """``--format json`` emits the envelope through row collection rendering
     (one-element list, matching ``ping``'s single-row precedent)."""
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "save", "deploy", "--organization", "Default", "--format", "json"],
     )
@@ -114,7 +114,7 @@ def test_job_templates_save_format_raw_emits_kind(fake_aap: Any) -> None:
     """``--format raw`` emits the first key of the envelope per the
     default-column contract. For a Resource that's ``kind``."""
     _seed_basic(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "save", "deploy", "--organization", "Default", "--format", "raw"]
     )
     assert result.exit_code == 0, result.output
@@ -123,9 +123,9 @@ def test_job_templates_save_format_raw_emits_kind(fake_aap: Any) -> None:
 
 def test_credentials_have_no_save_or_apply(fake_aap: Any) -> None:
     """Credential is read-only — its sub-app should not expose save/apply."""
-    result = CliRunner().invoke(app, ["credentials", "save", "x"])
+    result = CliInvoker().invoke(app, ["credentials", "save", "x"])
     assert result.exit_code != 0
-    assert "no such command" in result.output.lower() or "usage" in result.output.lower()
+    assert "save" in result.output.lower()
 
 
 def test_save_kind_org_scopes_inventory_child_kind(fake_aap: Any, tmp_path: Path) -> None:
@@ -165,7 +165,7 @@ def test_save_kind_org_scopes_inventory_child_kind(fake_aap: Any, tmp_path: Path
     )
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["save", "--kind", "hosts", "--org", "Default", "--out-dir", str(out_dir)],
     )
@@ -186,7 +186,9 @@ def test_save_kind_accepts_cli_name(seeded_default_org: Any, tmp_path: Path) -> 
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--out-dir", str(out_dir), "--kind", "job-templates"])
+    result = CliInvoker().invoke(
+        app, ["save", "--out-dir", str(out_dir), "--kind", "job-templates"]
+    )
     assert result.exit_code == 0, result.output
     assert (out_dir / "JobTemplate__Default__deploy.yml").exists()
 
@@ -203,7 +205,7 @@ def test_save_kind_accepts_domain_kind(seeded_default_org: Any, tmp_path: Path) 
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--out-dir", str(out_dir), "--kind", "JobTemplate"])
+    result = CliInvoker().invoke(app, ["save", "--out-dir", str(out_dir), "--kind", "JobTemplate"])
     assert result.exit_code == 0, result.output
     assert (out_dir / "JobTemplate__Default__deploy.yml").exists()
 
@@ -212,7 +214,7 @@ def test_save_kind_rejects_unknown_kind(fake_aap: Any, tmp_path: Path) -> None:
     """Neither ``by_cli_name`` nor ``get`` can resolve a bogus kind —
     the second arm of ``_resolve_kind`` re-raises."""
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--out-dir", str(out_dir), "--kind", "Bogus"])
+    result = CliInvoker().invoke(app, ["save", "--out-dir", str(out_dir), "--kind", "Bogus"])
     assert result.exit_code != 0
     output = result.output + (result.stderr or "")
     assert "Bogus" in output
@@ -231,7 +233,7 @@ def test_save_kind_print_paths_legacy_shape(seeded_default_org: Any, tmp_path: P
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "save",
@@ -264,7 +266,9 @@ def test_save_kind_default_emits_yaml_envelope_on_stdout(
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--out-dir", str(out_dir), "--kind", "job-templates"])
+    result = CliInvoker().invoke(
+        app, ["save", "--out-dir", str(out_dir), "--kind", "job-templates"]
+    )
     assert result.exit_code == 0, result.output
     docs = [d for d in yaml.safe_load_all(result.stdout) if d is not None]
     assert len(docs) == 1
@@ -282,7 +286,7 @@ def test_job_templates_save_format_with_out_still_writes_yaml_file(
     file that ``apply`` would then fail to parse."""
     _seed_basic(fake_aap)
     out = tmp_path / "jt.yml"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -315,7 +319,7 @@ def test_workflow_save_emits_partial_warning(seeded_default_org: Any, tmp_path: 
         description="multi-step",
     )
     out = tmp_path / "wf.yml"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",

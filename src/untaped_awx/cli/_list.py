@@ -1,16 +1,17 @@
 """``list`` builder for the spec-driven CLI factory."""
 
-from __future__ import annotations
+from typing import Annotated, Any
 
-from typing import Any
-
-import typer
+from cyclopts import App, Parameter
 from untaped import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,
+    echo,
     parse_kv_pairs,
+    raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
     resolve_each,
 )
@@ -18,7 +19,6 @@ from untaped import (
 from untaped_awx.application import GetResource, ListResources
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryOrganizationOption,
@@ -28,37 +28,50 @@ from untaped_awx.cli.options import (
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
-    @app.command("list")
+def _add_list(app: App, spec: AwxResourceSpec) -> None:
+    @app.command(name="list")
     def list_command(
-        search: str | None = typer.Option(None, "--search", help="Fuzzy server-side search."),
-        filter_: list[str] | None = typer.Option(
-            None,
-            "--filter",
-            help=(
-                "Server-side filter, KEY=VALUE (repeatable). Passed verbatim to "
-                "AWX, so any Django-style lookup works: --filter "
-                "organization__name=Default --filter name__icontains=deploy."
+        *,
+        search: Annotated[
+            str | None,
+            Parameter(name="--search", help="Fuzzy server-side search."),
+        ] = None,
+        filter_: Annotated[
+            list[str] | None,
+            Parameter(
+                name="--filter",
+                help=(
+                    "Server-side filter, KEY=VALUE (repeatable). Passed verbatim to "
+                    "AWX, so any Django-style lookup works: --filter "
+                    "organization__name=Default --filter name__icontains=deploy."
+                ),
+                consume_multiple=False,
             ),
-        ),
-        limit: int | None = typer.Option(None, "--limit", help="Cap result count."),
-        stdin: bool = typer.Option(
-            False,
-            "--stdin",
-            help="Read names from stdin (one per line); render only those records.",
-        ),
+        ] = None,
+        limit: Annotated[int | None, Parameter(name="--limit", help="Cap result count.")] = None,
+        stdin: Annotated[
+            bool,
+            Parameter(
+                name="--stdin",
+                negative="",
+                help="Read names from stdin (one per line); render only those records.",
+            ),
+        ] = False,
         by_id: ByIdOption = False,
         organization: OrganizationStdinLookupOption = None,
         inventory: InventoryStdinLookupOption = None,
         inventory_organization: InventoryOrganizationOption = None,
-        with_names: bool = typer.Option(
-            False,
-            "--with-names",
-            help=(
-                "Replace FK ids with names from summary_fields. Multi-valued "
-                "FKs (e.g. credentials) become lists of names."
+        with_names: Annotated[
+            bool,
+            Parameter(
+                name="--with-names",
+                negative="",
+                help=(
+                    "Replace FK ids with names from summary_fields. Multi-valued "
+                    "FKs (e.g. credentials) become lists of names."
+                ),
             ),
-        ),
+        ] = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
@@ -77,7 +90,7 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
         ``--filter organization__name=…``).
         """
         if stdin and (search or filter_ or limit is not None):
-            raise typer.BadParameter("--stdin cannot be combined with --search/--filter/--limit")
+            raise_usage("--stdin cannot be combined with --search/--filter/--limit")
         records: list[dict[str, Any]] = []
         any_failed = False
         with report_errors(), open_context(profile) as ctx:
@@ -112,6 +125,6 @@ def _add_list(app: typer.Typer, spec: AwxResourceSpec) -> None:
         # json/yaml, header-only table, blank for raw) so downstream
         # tools like ``jq`` always see a valid document.
         if records or not stdin:
-            typer.echo(render_rows(records, fmt=fmt, columns=cols))
+            echo(render_rows(records, fmt=fmt, columns=cols))
         if any_failed:
-            raise typer.Exit(code=1)
+            raise SystemExit(1)

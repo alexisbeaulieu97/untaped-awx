@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -128,7 +128,7 @@ def test_nodes_docs_columns_example_is_executable(fake_aap: Any) -> None:
     assert "--columns id --columns identifier --columns name --columns type --columns depth" in docs
 
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -159,7 +159,7 @@ def test_nodes_docs_columns_example_is_executable(fake_aap: Any) -> None:
 
 def test_nodes_lists_top_level_by_id(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -190,7 +190,7 @@ def test_nodes_lists_top_level_by_id(fake_aap: Any) -> None:
 
 def test_nodes_resolves_workflow_by_name(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -232,7 +232,7 @@ def test_nodes_numeric_name_is_default(fake_aap: Any) -> None:
         },
     )
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -253,7 +253,7 @@ def test_nodes_numeric_name_is_default(fake_aap: Any) -> None:
 
 def test_nodes_by_id_uses_awx_id(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -298,7 +298,7 @@ def test_nodes_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
         },
     )
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -317,7 +317,7 @@ def test_nodes_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
 
 
 def test_nodes_help_advertises_org_alias_without_short_o() -> None:
-    result = CliRunner().invoke(app, ["workflow-templates", "nodes", "--help"])
+    result = CliInvoker().invoke(app, ["workflow-templates", "nodes", "--help"])
     assert result.exit_code == 0, result.output
     assert "--organization" in result.output
     assert "--org" in result.output
@@ -326,7 +326,7 @@ def test_nodes_help_advertises_org_alias_without_short_o() -> None:
 
 def test_nodes_unknown_workflow_exits_nonzero(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["workflow-templates", "nodes", "does-not-exist"],
     )
@@ -336,7 +336,7 @@ def test_nodes_unknown_workflow_exits_nonzero(fake_aap: Any) -> None:
 def test_nodes_recursive_flattens_sub_workflow(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -360,7 +360,7 @@ def test_nodes_recursive_flattens_sub_workflow(fake_aap: Any) -> None:
 def test_nodes_depth_zero_returns_only_root(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -384,7 +384,7 @@ def test_nodes_depth_zero_returns_only_root(fake_aap: Any) -> None:
 def test_nodes_depth_one_caps_nested(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -410,7 +410,7 @@ def test_nodes_type_filter_keeps_only_matching_kind(fake_aap: Any) -> None:
     # the output, not the traversal.
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -440,7 +440,7 @@ def test_nodes_type_filter_keeps_only_matching_kind(fake_aap: Any) -> None:
 def test_nodes_type_filter_keeps_only_workflows(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -507,7 +507,7 @@ def test_nodes_cycle_emits_stderr_warning(fake_aap: Any) -> None:
             },
         },
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -528,7 +528,7 @@ def test_nodes_cycle_emits_stderr_warning(fake_aap: Any) -> None:
 
 
 def test_nodes_rejects_negative_depth(fake_aap: Any) -> None:
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["workflow-templates", "nodes", "100", "--depth", "-1"],
     )
@@ -538,7 +538,7 @@ def test_nodes_rejects_negative_depth(fake_aap: Any) -> None:
 def test_nodes_rejects_unknown_type_value(fake_aap: Any) -> None:
     # ``--type`` is a Literal; a typo must fail at parse time, not
     # silently return an empty result set.
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["workflow-templates", "nodes", "100", "--type", "job-template"],
     )
@@ -548,7 +548,7 @@ def test_nodes_rejects_unknown_type_value(fake_aap: Any) -> None:
 def test_nodes_accepts_multiple_positional_roots(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -575,7 +575,7 @@ def test_nodes_accepts_multiple_positional_roots(fake_aap: Any) -> None:
 def test_nodes_stdin_reads_multiple_roots_and_concatenates(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -599,7 +599,7 @@ def test_nodes_stdin_reads_multiple_roots_and_concatenates(fake_aap: Any) -> Non
 
 def test_nodes_stdin_rejects_positional_combo(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["workflow-templates", "nodes", "100", "--stdin"],
         input="200\n",
@@ -609,7 +609,7 @@ def test_nodes_stdin_rejects_positional_combo(fake_aap: Any) -> None:
 
 
 def test_nodes_stdin_rejects_empty_input(fake_aap: Any) -> None:
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["workflow-templates", "nodes", "--stdin"],
         input="",
@@ -622,7 +622,7 @@ def test_nodes_positional_partial_failure_warns_and_exits_nonzero(
     fake_aap: Any,
 ) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -645,7 +645,7 @@ def test_nodes_positional_partial_failure_warns_and_exits_nonzero(
 
 def test_nodes_stdin_partial_failure_warns_and_exits_nonzero(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -668,7 +668,7 @@ def test_nodes_stdin_partial_failure_warns_and_exits_nonzero(fake_aap: Any) -> N
 
 def test_nodes_filter_narrows_results(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -692,7 +692,7 @@ def test_nodes_filter_repeatable(fake_aap: Any) -> None:
     # Two filters compose with AND server-side: ``__in`` narrows to
     # nodes whose UJT is in {10, 200}; ``__gt`` then drops the UJT=10
     # row. Verifies both flags reach AWX, not just the first.
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -721,7 +721,7 @@ def test_nodes_filter_with_recursive_applies_at_every_level(fake_aap: Any) -> No
     # 3 (JT 11) + 4 (JT 12) inside the sub-workflow. Recursion succeeds
     # because the filter keeps the workflow-job-template row that lets
     # the BFS discover the child workflow.
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -752,7 +752,7 @@ def test_nodes_filter_with_recursive_prunes_sub_workflow_descent(
     # workflow 200 — nodes 3, 4 are absent. Locks in the documented
     # pruning semantics: filters that exclude sub-workflow rows stop
     # the descent at that node.
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -780,7 +780,7 @@ def test_nodes_filter_composes_with_depth_cap(fake_aap: Any) -> None:
     # both levels. UJT 11 is inside sub-workflow 200 (depth 1); UJT 12
     # is also there but excluded by the filter. Locks in that the
     # filter reaches the depth-capped recursion frontier.
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -806,7 +806,7 @@ def test_nodes_filter_composes_with_depth_cap(fake_aap: Any) -> None:
 
 def test_nodes_projects_summary_fields_parent_workflow_name(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -837,7 +837,7 @@ def test_nodes_json_explicit_summary_fields_column_projects_correctly(
     # via dotted-path projection. Pins that the column is reachable
     # via projection, with the correct per-row parent-workflow name.
     _seed_org_and_root_workflow(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -864,7 +864,7 @@ def test_nodes_recursive_summary_fields_carries_per_root_name(fake_aap: Any) -> 
     # field travels through recursion with per-level fidelity.
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -891,7 +891,7 @@ def test_nodes_recursive_summary_fields_carries_per_root_name(fake_aap: Any) -> 
 
 
 def test_nodes_filter_malformed_rejected(fake_aap: Any) -> None:
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["workflow-templates", "nodes", "100", "--filter", "no-equals-sign"],
     )
@@ -902,7 +902,7 @@ def test_nodes_filter_malformed_rejected(fake_aap: Any) -> None:
 def test_nodes_stdin_recursive_type_filter_end_to_end(fake_aap: Any) -> None:
     _seed_org_and_root_workflow(fake_aap)
     _seed_nested(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",

@@ -1,38 +1,33 @@
 """Composition root for ``untaped awx test`` (run / list / validate)."""
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-import typer
+from cyclopts import Parameter, validators
 from untaped import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,
+    create_app,
+    echo,
     parse_kv_pairs,
+    raise_usage,
+    render_rows,
     report_errors,
 )
 
 from untaped_awx.cli._context import AwxContext, open_context
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.domain import Job
 from untaped_awx.domain.test_suite import TestSuite
 from untaped_awx.errors import AwxApiError
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 from untaped_awx.infrastructure.specs import JOB_TEMPLATE_SPEC
 
-app = typer.Typer(
+app = create_app(
     name="test",
     help="Run declarative AWX-job test suites (parameterised launch matrices).",
-    no_args_is_help=True,
 )
-
-
-@app.callback()
-def _callback() -> None:
-    """Run declarative AWX-job test suites."""
 
 
 # Heavy imports (jinja2, yaml, the loader/runner) are deferred to subcommand
@@ -40,13 +35,35 @@ def _callback() -> None:
 
 _LOG_TAIL_LINES = 40
 
-_PATHS_ARG = typer.Argument(..., help="Test file(s) or director(y/ies).")
-_CASE_OPT = typer.Option(None, "--case", help="Run only the named case(s); repeat the flag.")
-_VAR_OPT = typer.Option([], "--var", help="key=value (repeatable).")
-_VARS_FILE_OPT = typer.Option([], "--vars-file", help="YAML file of variable values (repeatable).")
-_NON_INTERACTIVE_OPT = typer.Option(
-    False, "--non-interactive", help="Fail on missing required vars instead of prompting."
-)
+_PATHS_ARG = Annotated[list[Path], Parameter(help="Test file(s) or director(y/ies).")]
+_CASE_OPT = Annotated[
+    list[str] | None,
+    Parameter(
+        name="--case",
+        help="Run only the named case(s); repeat the flag.",
+        consume_multiple=False,
+    ),
+]
+_VAR_OPT = Annotated[
+    list[str] | None,
+    Parameter(name="--var", help="key=value (repeatable).", consume_multiple=False),
+]
+_VARS_FILE_OPT = Annotated[
+    list[Path] | None,
+    Parameter(
+        name="--vars-file",
+        help="YAML file of variable values (repeatable).",
+        consume_multiple=False,
+    ),
+]
+_NON_INTERACTIVE_OPT = Annotated[
+    bool,
+    Parameter(
+        name="--non-interactive",
+        negative="",
+        help="Fail on missing required vars instead of prompting.",
+    ),
+]
 
 
 # ---- shared helpers ------------------------------------------------------
@@ -62,9 +79,9 @@ def _expand_paths(paths: Iterable[Path]) -> list[Path]:
         elif path.is_file():
             out.append(path)
         else:
-            raise typer.BadParameter(f"{path} does not exist")
+            raise_usage(f"{path} does not exist")
     if not out:
-        raise typer.BadParameter("no test files found")
+        raise_usage("no test files found")
     return out
 
 
@@ -120,18 +137,33 @@ def _jt_scope(ctx: AwxContext, spec: AwxResourceSpec) -> dict[str, str] | None:
 # ---- run -----------------------------------------------------------------
 
 
-@app.command("run", no_args_is_help=True)
+@app.command(name="run")
 def run_command(
-    paths: list[Path] = _PATHS_ARG,
-    cases: list[str] | None = _CASE_OPT,
-    var: list[str] = _VAR_OPT,
-    vars_file: list[Path] = _VARS_FILE_OPT,
-    non_interactive: bool = _NON_INTERACTIVE_OPT,
-    parallel: int = typer.Option(1, "--parallel", min=1, help="Concurrent launch limit."),
-    timeout: float | None = typer.Option(None, "--timeout", help="Per-case wait timeout (s)."),
-    show_logs: bool = typer.Option(
-        False, "--show-logs", "-v", help="On failure, dump the tail of AWX stdout to stderr."
-    ),
+    paths: _PATHS_ARG,
+    cases: _CASE_OPT = None,
+    var: _VAR_OPT = None,
+    vars_file: _VARS_FILE_OPT = None,
+    non_interactive: _NON_INTERACTIVE_OPT = False,
+    parallel: Annotated[
+        int,
+        Parameter(
+            name="--parallel",
+            validator=validators.Number(gte=1),
+            help="Concurrent launch limit.",
+        ),
+    ] = 1,
+    timeout: Annotated[
+        float | None,
+        Parameter(name="--timeout", help="Per-case wait timeout (s)."),
+    ] = None,
+    show_logs: Annotated[
+        bool,
+        Parameter(
+            name=["--show-logs", "-v"],
+            negative="",
+            help="On failure, dump the tail of AWX stdout to stderr.",
+        ),
+    ] = False,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
     profile: ProfileOverrideOption = None,
@@ -149,7 +181,7 @@ def run_command(
         suites = _load_suites(
             files,
             cli_vars=cli_vars,
-            vars_files=tuple(vars_file),
+            vars_files=tuple(vars_file or []),
             non_interactive=non_interactive,
         )
         spec = _jt_spec(ctx)
@@ -178,7 +210,7 @@ def run_command(
                     continue
                 _print_failure_logs(ctx, result.suite, result.case, result.job_id)
 
-        typer.echo(
+        echo(
             render_rows(
                 [r.model_dump() for r in outcome.results],
                 fmt=fmt,
@@ -186,7 +218,7 @@ def run_command(
             )
         )
         if outcome.exit_code() != 0:
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
 
 def _print_failure_logs(ctx: AwxContext, suite: str, case: str, job_id: int) -> None:
@@ -202,24 +234,24 @@ def _print_failure_logs(ctx: AwxContext, suite: str, case: str, job_id: int) -> 
     try:
         lines = ctx.monitor.fetch_stdout(job)
     except AwxApiError as exc:
-        typer.echo(f"--- {suite}/{case} job {job_id}: log fetch failed ({exc})", err=True)
+        echo(f"--- {suite}/{case} job {job_id}: log fetch failed ({exc})", err=True)
         return
     tail = lines[-_LOG_TAIL_LINES:]
     header = f"--- {suite}/{case} job {job_id} (last {len(tail)} lines)"
-    typer.echo(header, err=True)
+    echo(header, err=True)
     for line in tail:
-        typer.echo(line, err=True)
+        echo(line, err=True)
 
 
 # ---- list ----------------------------------------------------------------
 
 
-@app.command("list", no_args_is_help=True)
+@app.command(name="list")
 def list_command(
-    paths: list[Path] = _PATHS_ARG,
-    var: list[str] = _VAR_OPT,
-    vars_file: list[Path] = _VARS_FILE_OPT,
-    non_interactive: bool = _NON_INTERACTIVE_OPT,
+    paths: _PATHS_ARG,
+    var: _VAR_OPT = None,
+    vars_file: _VARS_FILE_OPT = None,
+    non_interactive: _NON_INTERACTIVE_OPT = False,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
 ) -> None:
@@ -231,7 +263,7 @@ def list_command(
         suites = _load_suites(
             files,
             cli_vars=cli_vars,
-            vars_files=tuple(vars_file),
+            vars_files=tuple(vars_file or []),
             non_interactive=non_interactive,
         )
 
@@ -239,18 +271,18 @@ def list_command(
         rows: list[dict[str, Any]] = [_test_suite_row(suite) for suite in suites]
     else:
         rows = [_test_case_row(suite, case_name) for suite in suites for case_name in suite.cases]
-    typer.echo(render_rows(rows, fmt=fmt, columns=columns))
+    echo(render_rows(rows, fmt=fmt, columns=columns))
 
 
 # ---- validate ------------------------------------------------------------
 
 
-@app.command("validate", no_args_is_help=True)
+@app.command(name="validate")
 def validate_command(
-    paths: list[Path] = _PATHS_ARG,
-    var: list[str] = _VAR_OPT,
-    vars_file: list[Path] = _VARS_FILE_OPT,
-    non_interactive: bool = _NON_INTERACTIVE_OPT,
+    paths: _PATHS_ARG,
+    var: _VAR_OPT = None,
+    vars_file: _VARS_FILE_OPT = None,
+    non_interactive: _NON_INTERACTIVE_OPT = False,
     profile: ProfileOverrideOption = None,
 ) -> None:
     """Render + parse + resolve each case; report errors without launching."""
@@ -263,7 +295,7 @@ def validate_command(
         suites = _load_suites(
             files,
             cli_vars=cli_vars,
-            vars_files=tuple(vars_file),
+            vars_files=tuple(vars_file or []),
             non_interactive=non_interactive,
         )
         spec = _jt_spec(ctx)
@@ -276,12 +308,12 @@ def validate_command(
                 try:
                     resolver(spec, case, defaults=suite.defaults)
                 except AwxApiError as exc:
-                    typer.echo(f"{suite.name}/{case_name}: {exc}", err=True)
+                    echo(f"{suite.name}/{case_name}: {exc}", err=True)
                     any_errors = True
 
     if any_errors:
-        raise typer.Exit(code=1)
-    typer.echo(f"OK — {sum(len(s.cases) for s in suites)} case(s) validated", err=True)
+        raise SystemExit(1)
+    echo(f"OK — {sum(len(s.cases) for s in suites)} case(s) validated", err=True)
 
 
 def _test_case_row(suite: TestSuite, case_name: str) -> dict[str, Any]:

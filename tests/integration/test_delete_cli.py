@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -39,7 +39,7 @@ def test_delete_by_id_removes_record(
 
     monkeypatch.setattr("untaped_awx.cli._delete.ui_context", fail_ui_context, raising=False)
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
     )
     assert result.exit_code == 0, result.output
@@ -61,7 +61,7 @@ def test_delete_by_id_yes_uses_bulk_id_fast_path(
         return original_get(api_path, id_)
 
     monkeypatch.setattr(seeded_default_org, "_get", fail_job_template_get)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
     )
 
@@ -71,7 +71,7 @@ def test_delete_by_id_yes_uses_bulk_id_fast_path(
 
 def test_delete_by_name_resolves_through_organization(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -92,7 +92,7 @@ def test_delete_stdin_batch_removes_each(seeded_default_org: Any) -> None:
     """``list -f raw | delete --stdin --yes`` is the documented pipeline."""
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     _seed_jt(seeded_default_org, id_=11, name="beta")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--stdin", "--by-id", "--yes", "--format", "raw"],
         input="10\n11\n",
@@ -112,12 +112,12 @@ def test_delete_stdin_without_yes_or_dry_run_errors(seeded_default_org: Any) -> 
     fail fast rather than silently delete.
     """
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--stdin"],
         input="10\n",
     )
-    # Typer/Click's standard exit code for BadParameter.
+    # Usage errors exit before touching the store.
     assert result.exit_code == 2
     assert "--stdin requires" in (result.stderr or result.output)
     # Record must still exist.
@@ -126,7 +126,7 @@ def test_delete_stdin_without_yes_or_dry_run_errors(seeded_default_org: Any) -> 
 
 def test_dry_run_resolves_but_does_not_delete(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10", "--dry-run", "--format", "raw"],
     )
@@ -139,7 +139,7 @@ def test_dry_run_resolves_but_does_not_delete(seeded_default_org: Any) -> None:
 def test_dry_run_with_stdin_is_allowed(seeded_default_org: Any) -> None:
     """``--dry-run`` is a safe preview — no need for ``--yes``."""
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--stdin", "--by-id", "--dry-run", "--format", "raw"],
         input="10\n",
@@ -151,7 +151,7 @@ def test_dry_run_with_stdin_is_allowed(seeded_default_org: Any) -> None:
 
 def test_delete_missing_id_emits_error_row(seeded_default_org: Any) -> None:
     """A 404 from resolution emits ``error: <id>: ...`` and exits 1."""
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--by-id", "999", "--yes", "--format", "raw"],
     )
@@ -163,7 +163,7 @@ def test_delete_missing_id_emits_error_row(seeded_default_org: Any) -> None:
 def test_delete_mixed_success_and_missing_continues(seeded_default_org: Any) -> None:
     """Per-id batch errors are isolated — successful targets still get deleted."""
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--stdin", "--by-id", "--yes", "--format", "raw"],
         input="10\n999\n",
@@ -199,7 +199,7 @@ def test_delete_prompt_accepts_yes(
         raising=False,
     )
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10", "--format", "raw"],
     )
@@ -236,7 +236,7 @@ def test_delete_prompt_declines_aborts(
         raising=False,
     )
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10"],
     )
@@ -256,19 +256,19 @@ def test_delete_prompt_requires_yes_when_non_interactive(
         raising=False,
     )
 
-    result = CliRunner().invoke(app, ["job-templates", "delete", "--by-id", "10"])
+    result = CliInvoker().invoke(app, ["job-templates", "delete", "--by-id", "10"])
 
     assert result.exit_code == 1
     assert "awx delete requires --yes when stdin is not interactive" in result.output
     assert 10 in seeded_default_org.store["job_templates"]
 
 
-def test_delete_no_args_prints_help(seeded_default_org: Any) -> None:
-    """Hard Rule #9: no positional args + no --stdin → show help."""
-    result = CliRunner().invoke(app, ["job-templates", "delete"])
-    # Typer's ``no_args_is_help=True`` exits with code 2 and prints usage.
+def test_delete_no_args_is_usage_error(seeded_default_org: Any) -> None:
+    """No positional args + no ``--stdin`` → ``error: provide …`` usage error."""
+    result = CliInvoker().invoke(app, ["job-templates", "delete"])
+    # Missing identifiers is a usage error on stderr, exit 2.
     assert result.exit_code == 2
-    assert "Usage" in result.output
+    assert "error: provide JobTemplate name(s) or --stdin" in result.stderr
 
 
 def test_delete_defaults_to_name_lookup_for_digit_named(
@@ -283,7 +283,7 @@ def test_delete_defaults_to_name_lookup_for_digit_named(
         organization=1,
         organization_name="Default",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -328,7 +328,7 @@ def test_decline_after_prior_resolve_failure_exits_1(
         raising=False,
     )
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "delete", "--by-id", "10", "999"],
     )
@@ -358,7 +358,7 @@ def test_delete_conflict_surfaces_per_id(
         return original(api_path, id_)
 
     monkeypatch.setattr(seeded_default_org, "_delete", conflict_on_10)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
     )
     assert result.exit_code == 1
@@ -379,7 +379,7 @@ def test_delete_by_id_yes_populates_name_in_table(seeded_default_org: Any) -> No
     bulk-prefetch via ``?id__in=…`` now fills it in.
     """
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    result = CliRunner().invoke(app, ["job-templates", "delete", "--by-id", "10", "--yes"])
+    result = CliInvoker().invoke(app, ["job-templates", "delete", "--by-id", "10", "--yes"])
     assert result.exit_code == 0, result.output
     assert 10 not in seeded_default_org.store["job_templates"]
     assert "10" in result.stdout
@@ -398,7 +398,7 @@ def test_delete_stdin_by_id_bulk_prefetches_names_in_one_call(seeded_default_org
     """
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     _seed_jt(seeded_default_org, id_=11, name="beta")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["job-templates", "delete", "--stdin", "--by-id", "--yes"], input="10\n11\n"
     )
     assert result.exit_code == 0, result.output

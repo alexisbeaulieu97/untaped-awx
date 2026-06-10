@@ -1,7 +1,5 @@
 """Render ApplyOutcome diffs and result tables for CLI output."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from untaped_awx.application.apply_field_diff import PRESERVED_SECRET_NOTE

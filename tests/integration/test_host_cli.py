@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -63,7 +63,7 @@ def _seed_inventory_with_hosts(fake: Any) -> None:
 
 def test_hosts_list_returns_seeded_records(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["hosts", "list", "--format", "raw", "--columns", "name"],
     )
@@ -74,7 +74,7 @@ def test_hosts_list_returns_seeded_records(fake_aap: Any) -> None:
 
 def test_hosts_list_filter_passes_through(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "hosts",
@@ -95,7 +95,7 @@ def test_hosts_list_filter_passes_through(fake_aap: Any) -> None:
 
 def test_hosts_get_by_id(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["hosts", "get", "--by-id", "101", "--format", "json", "--columns", "name"],
     )
@@ -105,7 +105,7 @@ def test_hosts_get_by_id(fake_aap: Any) -> None:
 
 def test_hosts_get_by_stdin(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["hosts", "get", "--stdin", "--by-id", "--format", "raw", "--columns", "name"],
         input="101\n102\n",
@@ -118,7 +118,7 @@ def test_hosts_get_by_stdin(fake_aap: Any) -> None:
 def test_hosts_list_dotted_columns_walks_summary_fields(fake_aap: Any) -> None:
     """``--columns summary_fields.inventory.name`` walks the dict tree."""
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "hosts",
@@ -165,7 +165,7 @@ def test_hosts_apply_creates_host_via_nested_endpoint(
           enabled: true
         """
     )
-    result = CliRunner().invoke(app, ["hosts", "apply", str(doc), "--yes"])
+    result = CliInvoker().invoke(app, ["hosts", "apply", str(doc), "--yes"])
     assert result.exit_code == 0, result.output
     # The fake's nested POST handler stores the host with inventory=20.
     hosts = list(seeded_default_org.store["hosts"].values())
@@ -198,14 +198,14 @@ def test_hosts_apply_preview_does_not_write(seeded_default_org: Any, tmp_path: P
           description: Frontend web server
         """
     )
-    result = CliRunner().invoke(app, ["hosts", "apply", str(doc)])
+    result = CliInvoker().invoke(app, ["hosts", "apply", str(doc)])
     assert result.exit_code == 0, result.output
     assert seeded_default_org.store["hosts"] == {}
 
 
 def test_hosts_save_round_trips_to_yaml(fake_aap: Any) -> None:
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(app, ["hosts", "save", "web-01"])
+    result = CliInvoker().invoke(app, ["hosts", "save", "web-01"])
     assert result.exit_code == 0, result.output
     out = result.stdout
     # Save dumps YAML — exact field ordering varies, but kind + name must appear.
@@ -219,7 +219,7 @@ def test_hosts_save_emits_metadata_parent_inventory(fake_aap: Any) -> None:
     ``InventoryChildApplyStrategy`` succeeds. The strategy rejects with
     ``identity missing 'parent'`` otherwise — silent restore breakage."""
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(app, ["hosts", "save", "web-01"])
+    result = CliInvoker().invoke(app, ["hosts", "save", "web-01"])
     assert result.exit_code == 0, result.output
     import yaml as _yaml
 
@@ -235,12 +235,12 @@ def test_hosts_save_round_trips_through_apply(fake_aap: Any, tmp_path: Path) -> 
     """Save → apply round-trip: a saved Host must reapply cleanly with
     ``unchanged`` (or at worst no diff) against the same AWX state."""
     _seed_inventory_with_hosts(fake_aap)
-    save_result = CliRunner().invoke(app, ["hosts", "save", "web-01"])
+    save_result = CliInvoker().invoke(app, ["hosts", "save", "web-01"])
     assert save_result.exit_code == 0, save_result.output
     saved = tmp_path / "host.yml"
     saved.write_text(save_result.stdout)
     # Apply with --yes so we'd error loudly if metadata.parent were missing.
-    apply_result = CliRunner().invoke(app, ["hosts", "apply", str(saved), "--yes"])
+    apply_result = CliInvoker().invoke(app, ["hosts", "apply", str(saved), "--yes"])
     assert apply_result.exit_code == 0, apply_result.output
     # The host already exists with the same body — should be unchanged.
     assert "unchanged" in apply_result.output
@@ -252,7 +252,7 @@ def test_hosts_list_with_names_resolves_inventory(fake_aap: Any) -> None:
     flatten it. The ``flatten_fks`` columns= extension fixes that: the
     inventory column now renders the name from ``summary_fields``."""
     _seed_inventory_with_hosts(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["hosts", "list", "--with-names", "--columns", "inventory", "--format", "raw"],
     )
@@ -303,7 +303,7 @@ def test_hosts_get_with_inventory_scope_disambiguates_across_inventories(
         inventory_name="staging",
         description="staging web",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "hosts",
@@ -334,7 +334,7 @@ def test_hosts_get_with_inventory_organization_disambiguates_across_orgs(
     )
     seeded_default_org.seed("hosts", id=101, name="web-01", inventory=20, inventory_name="prod")
     seeded_default_org.seed("hosts", id=102, name="web-01", inventory=21, inventory_name="prod")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "hosts",
@@ -365,7 +365,7 @@ def test_hosts_get_accepts_inventory_org_alias(seeded_default_org: Any) -> None:
     )
     seeded_default_org.seed("hosts", id=101, name="web-01", inventory=20, inventory_name="prod")
     seeded_default_org.seed("hosts", id=102, name="web-01", inventory=21, inventory_name="prod")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "hosts",

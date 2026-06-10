@@ -21,34 +21,31 @@ factory bakes in CRUD assumptions and identity-based ``get`` that this
 virtual collection cannot satisfy.
 """
 
-from __future__ import annotations
+from typing import Annotated
 
-import typer
+from cyclopts import Parameter
 from untaped import (
     ColumnsOption,
     FormatOption,
     OutputFormat,
     ProfileOverrideOption,
+    create_app,
+    echo,
     parse_kv_pairs,
+    raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
 )
 
 from untaped_awx.application import BrowseUnifiedTemplates, GetUnifiedTemplate
 from untaped_awx.cli._context import open_context
 from untaped_awx.cli._get import default_get_columns
-from untaped_awx.cli._rendering import render_rows
 
-app = typer.Typer(
+app = create_app(
     name="unified-templates",
     help="Browse Unified Job Templates (the polymorphic view of every launchable kind).",
-    no_args_is_help=True,
 )
-
-
-@app.callback()
-def _callback() -> None:
-    """Browse Unified Job Templates."""
 
 
 _DEFAULT_LIST_COLUMNS = ["id", "name", "type"]
@@ -60,27 +57,28 @@ so any health column is empty for half the rows. Users who want health
 or organization context project them explicitly via ``--columns``."""
 
 
-@app.command("list")
+@app.command(name="list")
 def list_command(
-    type_: str | None = typer.Option(
-        None,
-        "--type",
-        help=(
-            "Filter by AWX type discriminator. Common values: "
-            "job_template, workflow_job_template, project, inventory_source. "
-            "Forwarded verbatim, so any value AWX accepts works."
+    *,
+    type_: Annotated[
+        str | None,
+        Parameter(
+            name="--type",
+            help=(
+                "Filter by AWX type discriminator. Common values: "
+                "job_template, workflow_job_template, project, inventory_source."
+            ),
         ),
-    ),
-    filter_: list[str] | None = typer.Option(
-        None,
-        "--filter",
-        help=(
-            "Server-side filter, KEY=VALUE (repeatable). Forwarded verbatim "
-            "to AWX so any Django-style lookup applies (--filter "
-            "name__icontains=deploy, --filter organization__name=Default, …)."
+    ] = None,
+    filter_: Annotated[
+        list[str] | None,
+        Parameter(
+            name="--filter",
+            help="Server-side filter, KEY=VALUE (repeatable). Forwarded verbatim to AWX.",
+            consume_multiple=False,
         ),
-    ),
-    limit: int | None = typer.Option(None, "--limit", help="Cap result count."),
+    ] = None,
+    limit: Annotated[int | None, Parameter(name="--limit", help="Cap result count.")] = None,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
     profile: ProfileOverrideOption = None,
@@ -89,29 +87,33 @@ def list_command(
     filters = parse_kv_pairs(filter_, flag="--filter")
     if type_ is not None:
         if "type" in filters:
-            raise typer.BadParameter(
+            raise_usage(
                 "pass --type or --filter type=…, not both — they collide on the same param",
             )
         filters["type"] = type_
     with report_errors(), open_context(profile) as ctx:
         records = list(BrowseUnifiedTemplates(ctx.ujts)(params=filters, limit=limit))
     cols = list(columns) if columns else list(_DEFAULT_LIST_COLUMNS)
-    typer.echo(render_rows(records, fmt=fmt, columns=cols))
+    echo(render_rows(records, fmt=fmt, columns=cols))
 
 
-@app.command("get", no_args_is_help=True)
+@app.command(name="get")
 def get_command(
-    ids: list[str] | None = typer.Argument(
-        None,
-        help=(
-            "Numeric Unified Job Template id(s). Names are not unique across kinds — "
-            "use the per-kind sub-app (job-templates get, projects get, …) for name lookup."
+    ids: Annotated[
+        list[str] | None,
+        Parameter(
+            help=(
+                "Numeric Unified Job Template id(s). Names are not unique across kinds — "
+                "use the per-kind sub-app for name lookup."
+            ),
         ),
-    ),
-    stdin: bool = typer.Option(
-        False, "--stdin", help="Read numeric ids from stdin (one per line)."
-    ),
-    fmt: OutputFormat = typer.Option("yaml", "--format", "-f"),
+    ] = None,
+    *,
+    stdin: Annotated[
+        bool,
+        Parameter(name="--stdin", negative="", help="Read numeric ids from stdin (one per line)."),
+    ] = False,
+    fmt: Annotated[OutputFormat, Parameter(name=["--format", "-f"])] = "yaml",
     columns: ColumnsOption = None,
     profile: ProfileOverrideOption = None,
 ) -> None:
@@ -125,7 +127,7 @@ def get_command(
                 # Fast-fail before hitting AWX so the error message is
                 # specifically about the id-only contract instead of a
                 # vague 404.
-                raise typer.BadParameter(
+                raise_usage(
                     f"unified-templates get is id-only ({raw!r} isn't a number); "
                     "names are not unique across kinds — use the per-kind sub-app "
                     "for name lookup.",
@@ -134,9 +136,9 @@ def get_command(
             return
         records, missing = GetUnifiedTemplate(ctx.ujts)(ids=identifiers)
     for raw in missing:
-        typer.echo(f"error: {raw}: not found", err=True)
+        echo(f"error: {raw}: not found", err=True)
     if records:
         cols = list(columns) if columns else default_get_columns(fmt, _DEFAULT_LIST_COLUMNS)
-        typer.echo(render_rows(records, fmt=fmt, columns=cols))
+        echo(render_rows(records, fmt=fmt, columns=cols))
     if missing:
-        raise typer.Exit(code=1)
+        raise SystemExit(1)

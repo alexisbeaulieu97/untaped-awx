@@ -13,7 +13,7 @@ from untaped_awx.infrastructure import AwxConfig
 
 class AwxPlugin:
     id = "awx"
-    untaped_api_version = 1
+    untaped_api_version = 2
 
     def register(self, registry: PluginRegistry) -> None:
         registry.add_profile_settings("awx", AwxConfig)

@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -62,7 +62,7 @@ def _seed_all_kinds(fake: Any) -> None:
 
 def test_list_returns_all_kinds(fake_aap: Any) -> None:
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["unified-templates", "list", "--format", "raw", "--columns", "id"],
     )
@@ -76,7 +76,7 @@ def test_list_default_columns_include_type_discriminator(fake_aap: Any) -> None:
     must include the polymorphic discriminator so users can tell the
     four aggregated kinds apart at a glance."""
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["unified-templates", "list", "--format", "raw"],
     )
@@ -92,7 +92,7 @@ def test_list_default_columns_include_type_discriminator(fake_aap: Any) -> None:
 
 def test_list_type_filter_narrows_to_one_kind(fake_aap: Any) -> None:
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["unified-templates", "list", "--type", "project", "--format", "raw", "--columns", "name"],
     )
@@ -104,7 +104,7 @@ def test_list_type_collision_with_filter_fails_fast(fake_aap: Any) -> None:
     """``--type X --filter type=Y`` would compete on the same query
     param — refusing keeps precedence deterministic."""
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "unified-templates",
@@ -121,7 +121,7 @@ def test_list_type_collision_with_filter_fails_fast(fake_aap: Any) -> None:
 
 def test_list_filter_passes_through_verbatim(fake_aap: Any) -> None:
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "unified-templates",
@@ -140,7 +140,7 @@ def test_list_filter_passes_through_verbatim(fake_aap: Any) -> None:
 
 def test_list_limit_caps_results(fake_aap: Any) -> None:
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["unified-templates", "list", "--limit", "2", "--format", "raw", "--columns", "id"],
     )
@@ -151,7 +151,7 @@ def test_list_limit_caps_results(fake_aap: Any) -> None:
 
 def test_get_multi_id_returns_full_records(fake_aap: Any) -> None:
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["unified-templates", "get", "10", "30", "--format", "raw", "--columns", "name"],
     )
@@ -162,7 +162,7 @@ def test_get_multi_id_returns_full_records(fake_aap: Any) -> None:
 
 def test_get_rejects_non_decimal_identifier(fake_aap: Any) -> None:
     _seed_all_kinds(fake_aap)
-    result = CliRunner().invoke(app, ["unified-templates", "get", "deploy-app"])
+    result = CliInvoker().invoke(app, ["unified-templates", "get", "deploy-app"])
     assert result.exit_code != 0
     assert "id-only" in result.output
 
@@ -174,13 +174,13 @@ def test_get_table_mode_falls_back_to_default_columns(fake_aap: Any) -> None:
     actually scannable. ``-f yaml`` / ``-f json`` keep the full record.
     """
     _seed_all_kinds(fake_aap)
-    table = CliRunner().invoke(app, ["unified-templates", "get", "10", "-f", "table"])
+    table = CliInvoker().invoke(app, ["unified-templates", "get", "10", "-f", "table"])
     assert table.exit_code == 0, table.output
     # Default-projection columns surface in the header.
     assert "type" in table.stdout
     assert "name" in table.stdout
     # The full-record yaml view still shows every field.
-    yaml_out = CliRunner().invoke(app, ["unified-templates", "get", "10", "-f", "yaml"])
+    yaml_out = CliInvoker().invoke(app, ["unified-templates", "get", "10", "-f", "yaml"])
     assert yaml_out.exit_code == 0, yaml_out.output
     # ``last_job_run`` is in the projected default cols too, but ``id: 10``
     # is a record-level field that yaml dumps even when table would project
@@ -197,7 +197,7 @@ def test_get_reports_missing_id_and_exits_nonzero(fake_aap: Any) -> None:
     resolve.
     """
     _seed_all_kinds(fake_aap)  # ids 10, 20, 30, 40
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["unified-templates", "get", "10", "999", "--format", "raw", "--columns", "id"],
     )
@@ -211,12 +211,12 @@ def test_get_reports_missing_id_and_exits_nonzero(fake_aap: Any) -> None:
 def test_get_stdin_round_trips_from_list_output(fake_aap: Any) -> None:
     """End-to-end pipe shape: ``list -f raw -c id | get --stdin``."""
     _seed_all_kinds(fake_aap)
-    list_result = CliRunner().invoke(
+    list_result = CliInvoker().invoke(
         app,
         ["unified-templates", "list", "--format", "raw", "--columns", "id"],
     )
     assert list_result.exit_code == 0, list_result.output
-    get_result = CliRunner().invoke(
+    get_result = CliInvoker().invoke(
         app,
         [
             "unified-templates",

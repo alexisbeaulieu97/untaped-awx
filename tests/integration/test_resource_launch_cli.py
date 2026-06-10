@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -27,7 +27,7 @@ def test_launch_reads_names_from_stdin(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=11, name="beta", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(app, ["job-templates", "launch", "--stdin"], input="alpha\nbeta\n")
+    result = CliInvoker().invoke(app, ["job-templates", "launch", "--stdin"], input="alpha\nbeta\n")
     assert result.exit_code == 0, result.output
     launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
     launched_ids = {c[1] for c in launches}
@@ -43,7 +43,7 @@ def test_launch_numeric_name_is_default(seeded_default_org: Any) -> None:
         "job_templates", id=123, name="other", organization=1, organization_name="Default"
     )
 
-    result = CliRunner().invoke(app, ["job-templates", "launch", "123", "--org", "Default"])
+    result = CliInvoker().invoke(app, ["job-templates", "launch", "123", "--org", "Default"])
 
     assert result.exit_code == 0, result.output
     launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
@@ -59,7 +59,7 @@ def test_launch_by_id_uses_awx_id(seeded_default_org: Any) -> None:
         "job_templates", id=123, name="other", organization=1, organization_name="Default"
     )
 
-    result = CliRunner().invoke(app, ["job-templates", "launch", "--by-id", "123"])
+    result = CliInvoker().invoke(app, ["job-templates", "launch", "--by-id", "123"])
 
     assert result.exit_code == 0, result.output
     launches = [c for c in seeded_default_org.actions_called if c[2] == "launch"]
@@ -75,7 +75,7 @@ def test_launch_supports_format_json(seeded_default_org: Any) -> None:
     seeded_default_org.seed(
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(app, ["job-templates", "launch", "alpha", "--format", "json"])
+    result = CliInvoker().invoke(app, ["job-templates", "launch", "alpha", "--format", "json"])
     assert result.exit_code == 0, result.output
     parsed = _json.loads(result.stdout)
     assert isinstance(parsed, list) and parsed, parsed
@@ -87,7 +87,7 @@ def test_launch_accepts_org_alias_for_name_scope(fake_aap: Any) -> None:
     fake_aap.seed("job_templates", id=10, name="deploy", organization=1, organization_name="Org-A")
     fake_aap.seed("job_templates", id=11, name="deploy", organization=2, organization_name="Org-B")
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["job-templates", "launch", "deploy", "--org", "Org-B", "--format", "raw"],
     )
@@ -107,7 +107,7 @@ def test_workflow_launch_rejects_unsupported_flags(seeded_default_org: Any) -> N
         "workflow_job_templates", id=10, name="wf", organization=1, organization_name="Default"
     )
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "workflow-templates",
@@ -134,7 +134,7 @@ def test_launch_forwards_full_action_payload(
     accumulated correctly."""
     fake_aap, ids = seeded_job_template_with_credentials
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -196,7 +196,7 @@ def test_launch_round_trips_falsy_but_meaningful_flag_values(
     seeded_default_org.seed(
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -222,7 +222,7 @@ def test_jobs_wait_supports_format_json(fake_aap: Any) -> None:
     import json as _json
 
     fake_aap.seed("jobs", id=42, name="run", status="successful", type="job")
-    result = CliRunner().invoke(app, ["jobs", "wait", "42", "--format", "json"])
+    result = CliInvoker().invoke(app, ["jobs", "wait", "42", "--format", "json"])
     assert result.exit_code == 0, result.output
     parsed = _json.loads(result.stdout)
     assert isinstance(parsed, list) and parsed
@@ -234,7 +234,7 @@ def test_jobs_wait_exits_nonzero_on_timeout(fake_aap: Any) -> None:
     already classifies that as ``timeout``; `jobs wait` should agree so
     scripts can ``set -e`` and detect the failure."""
     fake_aap.seed("jobs", id=42, name="run", status="running", type="job")
-    result = CliRunner().invoke(app, ["jobs", "wait", "42", "--timeout", "0"])
+    result = CliInvoker().invoke(app, ["jobs", "wait", "42", "--timeout", "0"])
     assert result.exit_code == 1, result.output
     assert "timeout" in (result.output + (result.stderr or ""))
 
@@ -252,7 +252,7 @@ def test_project_update_supports_format_json(seeded_default_org: Any) -> None:
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["projects", "update", "playbooks", "--organization", "Default", "--format", "json"]
     )
     assert result.exit_code == 0, result.output
@@ -269,7 +269,9 @@ def test_launch_stdin_emits_partial_results_when_one_fails(seeded_default_org: A
         "job_templates", id=10, name="alpha", organization=1, organization_name="Default"
     )
     # No "ghost" template — second call will fail.
-    result = CliRunner().invoke(app, ["job-templates", "launch", "--stdin"], input="alpha\nghost\n")
+    result = CliInvoker().invoke(
+        app, ["job-templates", "launch", "--stdin"], input="alpha\nghost\n"
+    )
     # Non-zero exit because ghost failed.
     assert result.exit_code != 0
     # alpha did launch — its action call is recorded server-side.
@@ -292,7 +294,7 @@ def test_jobs_logs_returns_text_not_json(fake_aap: Any) -> None:
         status="successful",
         stdout="PLAY [deploy] **\nTASK [run] **\nok: [host1]\n",
     )
-    result = CliRunner().invoke(app, ["jobs", "logs", "42"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42"])
     assert result.exit_code == 0, result.output
     assert "PLAY [deploy]" in result.stdout
     assert "TASK [run]" in result.stdout
@@ -307,7 +309,7 @@ def test_project_update_calls_action(seeded_default_org: Any) -> None:
         organization_name="Default",
         scm_type="git",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["projects", "update", "playbooks", "--organization", "Default"],
     )
@@ -325,7 +327,7 @@ def test_launch_help_narrows_flags_by_accepts() -> None:
     is the full set (regression sentinel — every narrowable flag
     advertised).
     """
-    runner = CliRunner()
+    runner = CliInvoker()
 
     wjt_help = runner.invoke(app, ["workflow-templates", "launch", "--help"])
     assert wjt_help.exit_code == 0, wjt_help.output

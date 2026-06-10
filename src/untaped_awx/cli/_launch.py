@@ -5,20 +5,21 @@ the per-flag visibility / rejection / payload-translation triple), the
 launch command body, and the per-job-error echo helper.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
 
-import typer
+from cyclopts import App, Parameter
 from rich.console import Console
 from untaped import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,
     UntapedError,
+    echo,
+    raise_usage,
     read_identifiers,
+    render_rows,
     report_errors,
 )
 
@@ -27,23 +28,22 @@ from untaped_awx.application.ports import FkResolver
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._event_render import render_event_text
 from untaped_awx.cli._parallel import _drain_parallel, _wait_parallel
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.cli.options import ByIdOption, OrganizationOption
 from untaped_awx.domain import Job
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
 
-# C901: ``_add_launch`` defines a Typer command with 12 parameters, each
-# carrying a ``hidden=hidden_by_flag[...]`` lookup from the per-kind
+# C901: ``_add_launch`` defines a Cyclopts command with 12 parameters, each
+# carrying a ``show=not hidden_by_flag[...]`` lookup from the per-kind
 # ``ActionSpec.accepts`` projection. The complexity comes from the
-# breadth of the Typer signature (one Option per launch flag), not from
+# breadth of the CLI signature (one Parameter per launch flag), not from
 # branchy dispatch — the eight per-flag branches now live in
 # ``LAUNCH_FLAGS`` and are walked uniformly. Splitting the signature
 # would mean either (a) parsing in a sibling function and rebinding —
-# which Typer can't do — or (b) folding flags into a single ``--opt
-# k=v`` glob — which would lose ``--help`` discoverability and
+# which would complicate app help — or (b) folding flags into a single
+# ``--opt k=v`` glob, which would lose ``--help`` discoverability and
 # per-flag typing.
-def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
+def _add_launch(app: App, spec: AwxResourceSpec) -> None:  # noqa: C901
     accepts = next((a.accepts for a in spec.actions if a.name == "launch"), frozenset())
 
     # Hide flags whose payload field isn't in this kind's
@@ -57,71 +57,111 @@ def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
     # and the ``--track`` job-status exit-code propagation. Splitting
     # either axis would lose the stable-stderr ordering guarantee
     # ``_drain_parallel`` provides or duplicate the body.
-    @app.command("launch", no_args_is_help=True)
+    @app.command(name="launch")
     def launch_command(  # noqa: C901
-        names: list[str] | None = typer.Argument(None, help=f"{spec.kind} name(s)."),
-        stdin: bool = typer.Option(False, "--stdin", help="Read names from stdin (one per line)."),
+        names: Annotated[list[str] | None, Parameter(help=f"{spec.kind} name(s).")] = None,
+        *,
+        stdin: Annotated[
+            bool,
+            Parameter(name="--stdin", negative="", help="Read names from stdin (one per line)."),
+        ] = False,
         by_id: ByIdOption = False,
         organization: OrganizationOption = None,
-        extra_vars: list[str] | None = typer.Option(
-            None, "--extra-vars", help="KEY=VAL override (repeatable)."
-        ),
-        limit: str | None = typer.Option(None, "--limit", help="Hosts pattern to limit to."),
-        inventory: str | None = typer.Option(
-            None,
-            "--inventory",
-            help="Override inventory by name (resolved to id).",
-            hidden=hidden_by_flag["--inventory"],
-        ),
-        credential: list[str] | None = typer.Option(
-            None,
-            "--credential",
-            help="Override credential by name (repeatable; resolved to ids).",
-            hidden=hidden_by_flag["--credential"],
-        ),
-        scm_branch: str | None = typer.Option(
-            None,
-            "--scm-branch",
-            help="SCM branch to run from.",
-            hidden=hidden_by_flag["--scm-branch"],
-        ),
-        job_tag: list[str] | None = typer.Option(
-            None,
-            "--job-tag",
-            help="Run only tasks with these tags (repeatable).",
-            hidden=hidden_by_flag["--job-tag"],
-        ),
-        skip_tag: list[str] | None = typer.Option(
-            None,
-            "--skip-tag",
-            help="Skip tasks with these tags (repeatable).",
-            hidden=hidden_by_flag["--skip-tag"],
-        ),
-        verbosity: int | None = typer.Option(
-            None, "--verbosity", help="0-4 (passed verbatim).", hidden=hidden_by_flag["--verbosity"]
-        ),
-        diff_mode: bool | None = typer.Option(
-            None,
-            "--diff-mode/--no-diff-mode",
-            help="Override diff_mode for this run.",
-            hidden=hidden_by_flag["--diff-mode"],
-        ),
-        job_type: str | None = typer.Option(
-            None,
-            "--job-type",
-            help="Override job_type (e.g. run, check).",
-            hidden=hidden_by_flag["--job-type"],
-        ),
-        wait: bool = typer.Option(False, "--wait", help="Block until terminal."),
-        track: bool = typer.Option(
-            False,
-            "--track",
-            "-t",
-            help=(
-                "Stream structured events to stderr while waiting; exit 1 "
-                "if any tracked job ends in a non-successful terminal state."
+        extra_vars: Annotated[
+            list[str] | None,
+            Parameter(
+                name="--extra-vars",
+                help="KEY=VAL override (repeatable).",
+                consume_multiple=False,
             ),
-        ),
+        ] = None,
+        limit: Annotated[
+            str | None,
+            Parameter(name="--limit", help="Hosts pattern to limit to."),
+        ] = None,
+        inventory: Annotated[
+            str | None,
+            Parameter(
+                name="--inventory",
+                help="Override inventory by name (resolved to id).",
+                show=not hidden_by_flag["--inventory"],
+            ),
+        ] = None,
+        credential: Annotated[
+            list[str] | None,
+            Parameter(
+                name="--credential",
+                help="Override credential by name (repeatable; resolved to ids).",
+                show=not hidden_by_flag["--credential"],
+                consume_multiple=False,
+            ),
+        ] = None,
+        scm_branch: Annotated[
+            str | None,
+            Parameter(
+                name="--scm-branch",
+                help="SCM branch to run from.",
+                show=not hidden_by_flag["--scm-branch"],
+            ),
+        ] = None,
+        job_tag: Annotated[
+            list[str] | None,
+            Parameter(
+                name="--job-tag",
+                help="Run only tasks with these tags (repeatable).",
+                show=not hidden_by_flag["--job-tag"],
+                consume_multiple=False,
+            ),
+        ] = None,
+        skip_tag: Annotated[
+            list[str] | None,
+            Parameter(
+                name="--skip-tag",
+                help="Skip tasks with these tags (repeatable).",
+                show=not hidden_by_flag["--skip-tag"],
+                consume_multiple=False,
+            ),
+        ] = None,
+        verbosity: Annotated[
+            int | None,
+            Parameter(
+                name="--verbosity",
+                help="0-4 (passed verbatim).",
+                show=not hidden_by_flag["--verbosity"],
+            ),
+        ] = None,
+        diff_mode: Annotated[
+            bool | None,
+            Parameter(
+                name="--diff-mode",
+                negative="--no-diff-mode",
+                help="Override diff_mode for this run.",
+                show=not hidden_by_flag["--diff-mode"],
+            ),
+        ] = None,
+        job_type: Annotated[
+            str | None,
+            Parameter(
+                name="--job-type",
+                help="Override job_type (e.g. run, check).",
+                show=not hidden_by_flag["--job-type"],
+            ),
+        ] = None,
+        wait: Annotated[
+            bool,
+            Parameter(name="--wait", negative="", help="Block until terminal."),
+        ] = False,
+        track: Annotated[
+            bool,
+            Parameter(
+                name=["--track", "-t"],
+                negative="",
+                help=(
+                    "Stream structured events to stderr while waiting; exit 1 "
+                    "if any tracked job ends in a non-successful terminal state."
+                ),
+            ),
+        ] = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
         profile: ProfileOverrideOption = None,
@@ -170,7 +210,7 @@ def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
                     )
                     launched.append((n, job))
                 except UntapedError as exc:
-                    typer.echo(f"error: {n}: {exc}", err=True)
+                    echo(f"error: {n}: {exc}", err=True)
                     any_failed = True
             # Monitor phase — drains each launched job to its terminal
             # state. Two or more ``--track`` jobs run concurrently
@@ -204,18 +244,18 @@ def _add_launch(app: typer.Typer, spec: AwxResourceSpec) -> None:  # noqa: C901
                             job = WatchJob(ctx.repo)(job)
                         jobs.append(job)
                     except UntapedError as exc:
-                        typer.echo(f"error: {n}: {exc}", err=True)
+                        echo(f"error: {n}: {exc}", err=True)
                         any_failed = True
         if jobs:
-            typer.echo(render_rows([j.model_dump() for j in jobs], fmt=fmt, columns=columns))
+            echo(render_rows([j.model_dump() for j in jobs], fmt=fmt, columns=columns))
         if track and any(j.status != "successful" for j in jobs):
             # --track promises CI-friendly exit codes: anything other than a
             # clean ``successful`` (failed/error/canceled, or still-running
             # if the monitor returned without terminal — which it shouldn't,
             # but be defensive) propagates as exit 1.
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
         if any_failed:
-            raise typer.Exit(code=1)
+            raise SystemExit(1)
 
 
 @dataclass(frozen=True)
@@ -285,7 +325,7 @@ def _reject_unsupported_launch_flags(
     """Fail loudly when the user supplies a flag this kind doesn't accept.
 
     Avoids the "parser acknowledges, code silently ignores" footgun. The
-    flags are wired uniformly across kinds (Typer signature is shared in
+    flags are wired uniformly across kinds (Cyclopts signature is shared in
     ``_add_launch``) but a workflow template's ``launch.accepts`` is a
     strict subset of a job template's, and silently dropping a value the
     user typed deliberately would be worse than rejecting up front.
@@ -296,7 +336,7 @@ def _reject_unsupported_launch_flags(
         if _is_supplied(supplied.get(f.flag)) and f.accepts_key not in accepts
     )
     if bad:
-        raise typer.BadParameter(
+        raise_usage(
             f"{kind}.launch does not accept {', '.join(bad)} "
             f"(supported: {', '.join(sorted(accepts))})"
         )
@@ -340,7 +380,7 @@ def _echo_parallel_errors(errors: list[tuple[str, UntapedError]]) -> bool:
     ``any_failed`` flag with ``|=``.
     """
     for failed_name, failure in errors:
-        typer.echo(f"error: {failed_name}: {failure}", err=True)
+        echo(f"error: {failed_name}: {failure}", err=True)
     return bool(errors)
 
 

@@ -9,11 +9,11 @@ from importlib.metadata import entry_points
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 from untaped import get_settings
 from untaped.main import build_app
 from untaped.plugins import PluginRegistry
 from untaped.settings import reset_config_registry_for_tests
+from untaped.testing import CliInvoker
 
 from untaped_awx.plugin import plugin as awx_plugin
 
@@ -44,10 +44,10 @@ def test_awx_plugin_entry_point_is_declared() -> None:
 
 
 def test_awx_plugin_declares_untaped_api_version() -> None:
-    assert awx_plugin.untaped_api_version == 1
+    assert awx_plugin.untaped_api_version == 2
 
 
-def test_untaped_source_tracks_core_git_source_without_stale_revision() -> None:
+def test_untaped_source_tracks_core_default_branch() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
     source = data["tool"]["uv"]["sources"]["untaped"]
 
@@ -57,7 +57,7 @@ def test_untaped_source_tracks_core_git_source_without_stale_revision() -> None:
 def test_root_app_can_register_awx_plugin() -> None:
     app = build_app(plugins=[awx_plugin])
 
-    result = CliRunner().invoke(app, ["awx", "--help"])
+    result = CliInvoker().invoke(app, ["awx", "--help"])
 
     assert result.exit_code == 0, result.output
     assert "Talk to Ansible Automation Platform / AWX" in result.output
@@ -76,7 +76,7 @@ def test_awx_plugin_registers_agent_skill() -> None:
 def test_config_list_includes_registered_awx_settings() -> None:
     app = build_app(plugins=[awx_plugin])
 
-    result = CliRunner().invoke(app, ["config", "list", "--format", "raw", "--columns", "key"])
+    result = CliInvoker().invoke(app, ["config", "list", "--format", "raw", "--columns", "key"])
 
     assert result.exit_code == 0, result.output
     keys = set(result.stdout.splitlines())
@@ -91,7 +91,7 @@ def test_config_list_redacts_awx_token(_isolate_config: Path) -> None:
     _isolate_config.write_text("profiles:\n  default:\n    awx:\n      token: awx-secret\n")
     app = build_app(plugins=[awx_plugin])
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["config", "list", "--format", "raw", "--columns", "key", "--columns", "value"]
     )
 

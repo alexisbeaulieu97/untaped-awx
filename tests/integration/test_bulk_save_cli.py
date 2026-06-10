@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 import yaml
-from typer.testing import CliRunner
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 from untaped_awx.domain import Resource
@@ -63,7 +63,7 @@ def test_save_all_rejects_traversal_in_resource_names(
         scm_type="git",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
 
     # No nested directories produced by stray `/`
@@ -119,7 +119,7 @@ def test_save_all_filter_scopes_org_kinds_server_side(
     )
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "save",
@@ -176,7 +176,7 @@ def test_save_all_filter_skips_schedules_when_filter_field_absent(
     )
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "save",
@@ -235,7 +235,7 @@ def test_save_all_org_scopes_direct_org_kinds(seeded_default_org: Any, tmp_path:
     )
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["save", "--all-kinds", "--org", "Default", "--out-dir", str(out_dir)],
     )
@@ -313,7 +313,7 @@ def test_save_all_org_includes_matching_schedules_without_invalid_filter(
     monkeypatch.setattr(fake_aap, "_list", spy_list)
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["save", "--all-kinds", "--org", "Default", "--out-dir", str(out_dir)],
     )
@@ -330,7 +330,7 @@ def test_save_all_org_rejects_duplicate_raw_organization_filter(
     fake_aap: Any, tmp_path: Path
 ) -> None:
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "save",
@@ -366,7 +366,7 @@ def test_save_all_filter_passes_through_read_only_field(
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "save",
@@ -404,7 +404,7 @@ def test_save_all_filter_passes_through_list_only_field(
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "save",
@@ -465,7 +465,7 @@ def test_save_all_with_no_filter_captures_every_kind(
     )
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
 
     saved_jts = sorted(p.name for p in out_dir.glob("JobTemplate__*.yml"))
@@ -482,7 +482,7 @@ def test_save_all_with_no_filter_captures_every_kind(
 def test_save_all_filter_rejects_malformed_entry(fake_aap: Any, tmp_path: Path) -> None:
     """Same KEY=VALUE validation as ``<kind> list --filter``."""
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["save", "--all-kinds", "--out-dir", str(out_dir), "--filter", "bogus"]
     )
     assert result.exit_code != 0
@@ -513,7 +513,7 @@ def test_save_all_distinguishes_same_named_resources_across_orgs(
     )
 
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
 
     saved = sorted(p.name for p in out_dir.glob("JobTemplate__*.yml"))
@@ -547,7 +547,7 @@ def test_save_all_default_emits_yaml_envelopes_on_stdout(
         playbook="b.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
 
     files = sorted(out_dir.glob("JobTemplate__*.yml"))
@@ -579,7 +579,7 @@ def test_save_all_print_paths_emits_filenames_on_stdout(
         playbook="a.yml",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["save", "--all-kinds", "--out-dir", str(out_dir), "--print-paths"]
     )
     assert result.exit_code == 0, result.output
@@ -615,7 +615,7 @@ def test_save_all_default_coexists_with_read_only_skip_notes(
         credential_type=1,
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
     assert "skipping Credential" in result.stderr
     docs = [d for d in yaml.safe_load_all(result.stdout) if d is not None]
@@ -643,14 +643,14 @@ def test_save_all_default_keeps_partial_fidelity_header_comment(
         description="multi-step",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["save", "--all-kinds", "--out-dir", str(out_dir), "--kind", "WorkflowJobTemplate"]
     )
     assert result.exit_code == 0, result.output
     # The disk file's first non-separator line is the comment; that
     # exact line must reappear verbatim in the stdout stream so the
     # bulk dump matches the on-disk shape per doc (modulo trailing
-    # newline added by ``typer.echo``).
+    # newline added by the CLI output helper).
     saved = out_dir / "WorkflowJobTemplate__Default__pipeline.yml"
     file_text = saved.read_text()
     first_comment_line = next(line for line in file_text.splitlines() if line.startswith("#"))
@@ -679,7 +679,7 @@ def test_save_all_expands_tilde_in_out_dir(
         organization_name="Default",
         playbook="a.yml",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["save", "--all-kinds", "--out-dir", "~/backup", "--print-paths"]
     )
     assert result.exit_code == 0, result.output
@@ -706,7 +706,7 @@ def test_save_all_with_only_read_only_kinds_emits_empty_stream(
         credential_type=1,
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
     assert result.stdout == "", f"expected empty stdout, got: {result.stdout!r}"
     assert "skipping Credential" in result.stderr
@@ -730,7 +730,7 @@ def test_save_all_skips_credentials(seeded_default_org: Any, tmp_path: Path) -> 
         credential_type=1,
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["save", "--all-kinds", "--out-dir", str(out_dir)],
     )
@@ -755,7 +755,7 @@ def test_save_all_kinds_flag(
         scm_type="git",
     )
     out_dir = tmp_path / "backup"
-    result = CliRunner().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
+    result = CliInvoker().invoke(app, ["save", "--all-kinds", "--out-dir", str(out_dir)])
     assert result.exit_code == 0, result.output
     assert (out_dir / "Project__Default__playbooks.yml").exists()
     assert "deprecated" not in result.stdout
@@ -763,6 +763,6 @@ def test_save_all_kinds_flag(
 
 
 def test_save_rejects_removed_all_alias() -> None:
-    result = CliRunner().invoke(app, ["save", "--all", "--out-dir", "backup"])
-    assert result.exit_code == 2
-    assert "No such option" in result.output
+    result = CliInvoker().invoke(app, ["save", "--all", "--out-dir", "backup"])
+    assert result.exit_code != 0
+    assert "--all" in result.output

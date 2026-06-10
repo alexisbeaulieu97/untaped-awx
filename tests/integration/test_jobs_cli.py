@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
 from untaped.settings import get_settings
+from untaped.testing import CliInvoker
 
 from untaped_awx import app
 
@@ -69,7 +69,7 @@ def _seed_events(fake: Any, *, job_id: int = 42) -> None:
 def test_jobs_list_returns_seeded_records(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=42)
     _seed_running_job(fake_aap, job_id=43)
-    result = CliRunner().invoke(app, ["jobs", "list", "--format", "raw", "--columns", "id"])
+    result = CliInvoker().invoke(app, ["jobs", "list", "--format", "raw", "--columns", "id"])
     assert result.exit_code == 0, result.output
     ids = sorted(result.stdout.strip().splitlines())
     assert ids == ["42", "43"]
@@ -94,7 +94,7 @@ def test_jobs_list_table_honours_global_ui_collection_view(
     get_settings.cache_clear()
     _seed_running_job(fake_aap, job_id=42)
 
-    result = CliRunner().invoke(app, ["jobs", "list", "--format", "table"])
+    result = CliInvoker().invoke(app, ["jobs", "list", "--format", "table"])
 
     assert result.exit_code == 0, result.output
     assert "id: 42" in result.stdout
@@ -105,7 +105,7 @@ def test_jobs_list_table_honours_global_ui_collection_view(
 def test_jobs_list_status_filter_passes_to_awx(fake_aap: Any) -> None:
     fake_aap.seed("jobs", id=1, name="ok", status="successful")
     fake_aap.seed("jobs", id=2, name="bad", status="failed")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "list", "--status", "failed", "--format", "raw", "--columns", "id"]
     )
     assert result.exit_code == 0, result.output
@@ -115,7 +115,7 @@ def test_jobs_list_status_filter_passes_to_awx(fake_aap: Any) -> None:
 def test_jobs_events_drains_existing(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
     _seed_events(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "events", "42", "--format", "raw", "--columns", "counter"]
     )
     assert result.exit_code == 0, result.output
@@ -136,7 +136,7 @@ def test_jobs_events_follow_streams_events_to_stdout(fake_aap: Any) -> None:
 
     _seed_running_job(fake_aap)  # already terminal — drain loop returns
     _seed_events(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "events", "42", "--follow", "--format", "json", "--columns", "counter"],
     )
@@ -151,13 +151,13 @@ def test_jobs_events_follow_streams_events_to_stdout(fake_aap: Any) -> None:
 def test_jobs_events_follow_with_table_format_renders_human_lines(fake_aap: Any) -> None:
     """Table mode under ``--follow`` streams one colored human-readable
     line per event (PLAY/TASK/ok/changed/failed), via Rich Console — ANSI
-    on a TTY, plain text under ``CliRunner`` (which doesn't simulate one).
+    on a TTY, plain text under ``CliInvoker`` (which doesn't simulate one).
     """
     _seed_running_job(fake_aap)
     _seed_events(fake_aap)
-    result = CliRunner().invoke(app, ["jobs", "events", "42", "--follow"])
+    result = CliInvoker().invoke(app, ["jobs", "events", "42", "--follow"])
     assert result.exit_code == 0, result.output
-    # ``CliRunner`` has no TTY, so colour is stripped — but the rendered
+    # ``CliInvoker`` has no TTY, so colour is stripped — but the rendered
     # shape (PLAY/TASK/ok/failed) must still appear.
     out = result.stdout
     assert "PLAY [Deploy]" in out
@@ -169,7 +169,7 @@ def test_jobs_events_follow_with_table_format_renders_human_lines(fake_aap: Any)
 def test_jobs_events_server_side_filter(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
     _seed_events(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "jobs",
@@ -190,7 +190,7 @@ def test_jobs_events_server_side_filter(fake_aap: Any) -> None:
 def test_jobs_events_from_counter_skips_already_seen(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
     _seed_events(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "jobs",
@@ -211,21 +211,23 @@ def test_jobs_events_from_counter_skips_already_seen(fake_aap: Any) -> None:
 
 def test_jobs_logs_prints_full_stdout_by_default(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(app, ["jobs", "logs", "42"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42"])
     assert result.exit_code == 0, result.output
     assert result.stdout.strip().splitlines() == ["line-0", "line-1", "line-2"]
 
 
 def test_jobs_logs_supports_standard_raw_columns_options(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--format", "raw", "--columns", "line"])
+    result = CliInvoker().invoke(
+        app, ["jobs", "logs", "42", "--format", "raw", "--columns", "line"]
+    )
     assert result.exit_code == 0, result.output
     assert result.stdout.strip().splitlines() == ["line-0", "line-1", "line-2"]
 
 
 def test_jobs_logs_supports_structured_formatter_output(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "logs", "42", "--format", "json", "--columns", "line"]
     )
     assert result.exit_code == 0, result.output
@@ -241,7 +243,7 @@ def test_jobs_logs_follow_emits_ndjson_under_json(fake_aap: Any) -> None:
     import json as _json
 
     _seed_running_job(fake_aap)  # terminal — stream_stdout returns immediately
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--follow", "--format", "json"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--follow", "--format", "json"])
     assert result.exit_code == 0, result.output
     lines = [line for line in result.stdout.strip().splitlines() if line]
     parsed = [_json.loads(line) for line in lines]
@@ -256,7 +258,7 @@ def test_jobs_logs_follow_columns_filter_under_json(fake_aap: Any) -> None:
     import json as _json
 
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "logs", "42", "--follow", "--format", "json", "--columns", "line"],
     )
@@ -269,7 +271,7 @@ def test_jobs_logs_follow_raw_passes_through(fake_aap: Any) -> None:
     """``--follow --format raw`` (the default fmt) emits raw log lines with
     no JSON wrapping — same observable shape as the non-follow raw path."""
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--follow"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--follow"])
     assert result.exit_code == 0, result.output
     assert result.stdout.strip().splitlines() == ["line-0", "line-1", "line-2"]
 
@@ -281,7 +283,7 @@ def test_jobs_logs_follow_raw_columns_line_is_noop(fake_aap: Any) -> None:
     identity. Pins parity for the only realistic user-supplied value.
     """
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "logs", "42", "--follow", "--format", "raw", "--columns", "line"]
     )
     assert result.exit_code == 0, result.output
@@ -294,7 +296,7 @@ def test_jobs_logs_follow_yaml_keeps_per_line_emission(fake_aap: Any) -> None:
     this is an explicit regression pin: don't accidentally fold yaml into
     the NDJSON path while reshaping the json branch."""
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--follow", "--format", "yaml"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--follow", "--format", "yaml"])
     assert result.exit_code == 0, result.output
     # Three single-doc yaml blocks, one per log line.
     out = result.stdout
@@ -309,7 +311,7 @@ def test_jobs_logs_follow_json_empty_stream_emits_nothing(fake_aap: Any) -> None
     so a downstream ``jq`` consumer doesn't trip on a single empty doc.
     """
     fake_aap.seed("jobs", id=42, name="empty", status="successful", stdout="")
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--follow", "--format", "json"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--follow", "--format", "json"])
     assert result.exit_code == 0, result.output
     assert result.stdout == ""
 
@@ -323,7 +325,7 @@ def test_jobs_logs_follow_json_multi_id_keeps_stdout_pipe_clean(fake_aap: Any) -
 
     _seed_running_job(fake_aap, job_id=42)
     _seed_running_job(fake_aap, job_id=43)
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "43", "--follow", "--format", "json"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "43", "--follow", "--format", "json"])
     assert result.exit_code == 0, result.output
     # Breadcrumbs on stderr only.
     assert "[42]" in result.stderr
@@ -339,7 +341,7 @@ def test_jobs_logs_follow_json_multi_id_keeps_stdout_pipe_clean(fake_aap: Any) -
 
 def test_jobs_logs_tail_returns_only_last_n(fake_aap: Any) -> None:
     _seed_running_job(fake_aap)
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--tail", "2"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--tail", "2"])
     assert result.exit_code == 0, result.output
     assert result.stdout.strip().splitlines() == ["line-1", "line-2"]
 
@@ -351,14 +353,14 @@ def test_jobs_logs_grep_filters_lines(fake_aap: Any) -> None:
         status="successful",
         stdout="info: ok\nERROR: boom\ninfo: done\n",
     )
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--grep", "ERROR"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--grep", "ERROR"])
     assert result.exit_code == 0, result.output
     assert result.stdout.strip() == "ERROR: boom"
 
 
 def test_jobs_logs_grep_ignore_case(fake_aap: Any) -> None:
     fake_aap.seed("jobs", id=42, status="successful", stdout="error: lower\nfine\n")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "logs", "42", "--grep", "ERROR", "--ignore-case"],
     )
@@ -368,11 +370,11 @@ def test_jobs_logs_grep_ignore_case(fake_aap: Any) -> None:
 
 def test_jobs_logs_invalid_grep_pattern_rejected_at_boundary(fake_aap: Any) -> None:
     """An unterminated character class is user input, not a bug — it must
-    surface as a clean ``BadParameter`` (typer exit 2), not a Python
+    surface as a clean usage error, not a Python
     traceback through ``report_errors`` (which only translates
     ``UntapedError``)."""
     fake_aap.seed("jobs", id=42, status="successful", stdout="anything\n")
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--grep", "[unclosed"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--grep", "[unclosed"])
     assert result.exit_code != 0
     assert "is not a valid regex" in result.output
     # Make sure the underlying Python re.error didn't escape.
@@ -390,7 +392,7 @@ def test_jobs_get_with_kind_workflow_job_hits_workflow_jobs_endpoint(fake_aap: A
         name="nightly-pipeline",
         status="successful",
     )
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "get", "999", "--kind", "workflow_job", "--format", "raw", "--columns", "name"],
     )
@@ -462,13 +464,13 @@ class _PrefixingStubStream:
 
 def test_launch_track_exits_zero_on_successful_job(fake_aap: Any) -> None:
     _seed_basic_jt(fake_aap, job_status="successful")
-    result = CliRunner().invoke(app, ["job-templates", "launch", "deploy", "--track"])
+    result = CliInvoker().invoke(app, ["job-templates", "launch", "deploy", "--track"])
     assert result.exit_code == 0, result.output
 
 
 def test_launch_track_exits_one_on_job_failure(fake_aap: Any) -> None:
     _seed_basic_jt(fake_aap, job_status="failed")
-    result = CliRunner().invoke(app, ["job-templates", "launch", "deploy", "--track"])
+    result = CliInvoker().invoke(app, ["job-templates", "launch", "deploy", "--track"])
     assert result.exit_code == 1
 
 
@@ -497,7 +499,9 @@ def test_launch_track_parallel_drains_concurrently(
 
     monkeypatch.setattr(_parallel, "StreamJobEvents", _BarrierStream)
 
-    result = CliRunner().invoke(app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"])
+    result = CliInvoker().invoke(
+        app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"]
+    )
     assert result.exit_code == 0, result.output
 
 
@@ -512,7 +516,9 @@ def test_launch_track_output_lines_carry_template_prefix(
     _seed_two_jts(fake_aap)
     monkeypatch.setattr(_parallel, "StreamJobEvents", _PrefixingStubStream)
 
-    result = CliRunner().invoke(app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"])
+    result = CliInvoker().invoke(
+        app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"]
+    )
     assert result.exit_code == 0, result.output
     assert "[deploy-a]" in result.stderr
     assert "[deploy-b]" in result.stderr
@@ -537,7 +543,9 @@ def test_launch_track_one_failed_exits_one_and_logs_both(
     fake_aap.next_action_status = "failed"
     monkeypatch.setattr(_parallel, "StreamJobEvents", _PrefixingStubStream)
 
-    result = CliRunner().invoke(app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"])
+    result = CliInvoker().invoke(
+        app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"]
+    )
     assert result.exit_code == 1, result.output
     assert "[deploy-a]" in result.stderr
     assert "[deploy-b]" in result.stderr
@@ -577,7 +585,7 @@ def test_launch_wait_parallel_returns_results_in_launch_order(
 
     monkeypatch.setattr(_parallel, "WatchJob", _StubWatch)
 
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         [
             "job-templates",
@@ -630,7 +638,9 @@ def test_launch_track_worker_exception_wraps_to_untaped_error(
 
     monkeypatch.setattr(_parallel, "StreamJobEvents", _StubStreamWithDeployAFailure)
 
-    result = CliRunner().invoke(app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"])
+    result = CliInvoker().invoke(
+        app, ["job-templates", "launch", "deploy-a", "deploy-b", "--track"]
+    )
     assert result.exit_code == 1, result.output
     # Single-prefix error row, with the original exception class name
     # preserved for debuggability.
@@ -648,7 +658,7 @@ def test_jobs_get_accepts_multiple_positional_ids(fake_aap: Any) -> None:
     ``awx <kind> get a b c``."""
     _seed_running_job(fake_aap, job_id=42)
     _seed_running_job(fake_aap, job_id=43)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "get", "42", "43", "--format", "raw", "--columns", "id"]
     )
     assert result.exit_code == 0, result.output
@@ -660,7 +670,7 @@ def test_jobs_get_reads_ids_from_stdin(fake_aap: Any) -> None:
     """``jobs list -f raw | jobs get --stdin`` is the documented pipeline shape."""
     _seed_running_job(fake_aap, job_id=42)
     _seed_running_job(fake_aap, job_id=43)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "get", "--stdin", "--format", "raw", "--columns", "id"],
         input="42\n43\n",
@@ -674,7 +684,7 @@ def test_jobs_get_continues_when_one_id_missing(fake_aap: Any) -> None:
     """A missing id in a multi-id batch must not suppress the resolved
     ids — same rule as ``awx <kind> get --stdin``."""
     _seed_running_job(fake_aap, job_id=42)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "get", "9999", "42", "--format", "raw", "--columns", "id"],
         input="",
@@ -691,7 +701,7 @@ def test_jobs_get_rejects_mixed_positional_and_stdin(fake_aap: Any) -> None:
     """Per ``read_identifiers``: mixing positional and ``--stdin`` is
     refused, since a misplaced flag would silently act on the wrong set."""
     _seed_running_job(fake_aap, job_id=42)
-    result = CliRunner().invoke(app, ["jobs", "get", "42", "--stdin"], input="43\n")
+    result = CliInvoker().invoke(app, ["jobs", "get", "42", "--stdin"], input="43\n")
     assert result.exit_code != 0
     assert "stdin" in (result.output + (result.stderr or "")).lower()
 
@@ -699,7 +709,7 @@ def test_jobs_get_rejects_mixed_positional_and_stdin(fake_aap: Any) -> None:
 def test_jobs_get_rejects_non_numeric_stdin_entry(fake_aap: Any) -> None:
     """Non-numeric job ids surface as a per-id error (not a crash)."""
     _seed_running_job(fake_aap, job_id=42)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "get", "--stdin", "--format", "raw", "--columns", "id"],
         input="not-a-number\n42\n",
@@ -715,7 +725,7 @@ def test_jobs_get_rejects_non_numeric_stdin_entry(fake_aap: Any) -> None:
 def test_jobs_wait_accepts_multiple_positional_ids(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=42)
     _seed_running_job(fake_aap, job_id=43)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "wait", "42", "43", "--format", "raw", "--columns", "id"]
     )
     assert result.exit_code == 0, result.output
@@ -726,7 +736,7 @@ def test_jobs_wait_accepts_multiple_positional_ids(fake_aap: Any) -> None:
 def test_jobs_wait_reads_ids_from_stdin(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=42)
     _seed_running_job(fake_aap, job_id=43)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "wait", "--stdin", "--format", "raw", "--columns", "id"],
         input="42\n43\n",
@@ -738,7 +748,7 @@ def test_jobs_wait_reads_ids_from_stdin(fake_aap: Any) -> None:
 
 def test_jobs_wait_rejects_mixed_positional_and_stdin(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=42)
-    result = CliRunner().invoke(app, ["jobs", "wait", "42", "--stdin"], input="43\n")
+    result = CliInvoker().invoke(app, ["jobs", "wait", "42", "--stdin"], input="43\n")
     assert result.exit_code != 0
     assert "stdin" in (result.output + (result.stderr or "")).lower()
 
@@ -747,7 +757,7 @@ def test_jobs_wait_continues_when_one_id_missing(fake_aap: Any) -> None:
     """A missing id in a multi-id ``wait`` batch must not suppress the
     resolved ids — same pipeline-resilience contract as ``jobs get``."""
     _seed_running_job(fake_aap, job_id=42)
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "wait", "9999", "42", "--format", "raw", "--columns", "id"]
     )
     assert result.exit_code != 0
@@ -765,7 +775,7 @@ def test_jobs_wait_multi_id_timeout(fake_aap: Any) -> None:
     """
     fake_aap.seed("jobs", id=42, status="running")
     fake_aap.seed("jobs", id=43, status="running")
-    result = CliRunner().invoke(app, ["jobs", "wait", "42", "43", "--timeout", "0"])
+    result = CliInvoker().invoke(app, ["jobs", "wait", "42", "43", "--timeout", "0"])
     assert result.exit_code == 1
     stderr = result.stderr or ""
     # One breadcrumb per id — neither was silently dropped.
@@ -778,7 +788,7 @@ def test_jobs_logs_concatenates_streams_across_ids(fake_aap: Any) -> None:
     turn. A ``[<id>] `` stderr breadcrumb identifies which job is up."""
     fake_aap.seed("jobs", id=42, status="successful", stdout="alpha-1\nalpha-2\n")
     fake_aap.seed("jobs", id=43, status="successful", stdout="beta-1\nbeta-2\n")
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "43"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "43"])
     assert result.exit_code == 0, result.output
     out = result.stdout.strip().splitlines()
     assert out == ["alpha-1", "alpha-2", "beta-1", "beta-2"]
@@ -790,7 +800,7 @@ def test_jobs_logs_concatenates_streams_across_ids(fake_aap: Any) -> None:
 def test_jobs_logs_reads_ids_from_stdin(fake_aap: Any) -> None:
     fake_aap.seed("jobs", id=42, status="successful", stdout="alpha\n")
     fake_aap.seed("jobs", id=43, status="successful", stdout="beta\n")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "logs", "--stdin"],
         input="42\n43\n",
@@ -801,7 +811,7 @@ def test_jobs_logs_reads_ids_from_stdin(fake_aap: Any) -> None:
 
 def test_jobs_logs_rejects_mixed_positional_and_stdin(fake_aap: Any) -> None:
     fake_aap.seed("jobs", id=42, status="successful", stdout="x\n")
-    result = CliRunner().invoke(app, ["jobs", "logs", "42", "--stdin"], input="43\n")
+    result = CliInvoker().invoke(app, ["jobs", "logs", "42", "--stdin"], input="43\n")
     assert result.exit_code != 0
     assert "stdin" in (result.output + (result.stderr or "")).lower()
 
@@ -810,7 +820,7 @@ def test_jobs_logs_continues_when_one_id_missing(fake_aap: Any) -> None:
     """A missing id in a multi-id ``logs`` batch streams what landed
     and emits a per-id error on stderr without aborting."""
     fake_aap.seed("jobs", id=42, status="successful", stdout="alpha\n")
-    result = CliRunner().invoke(app, ["jobs", "logs", "9999", "42"])
+    result = CliInvoker().invoke(app, ["jobs", "logs", "9999", "42"])
     assert result.exit_code != 0
     # The reachable job's stdout still made it to stdout.
     assert "alpha" in result.stdout
@@ -825,7 +835,7 @@ def test_jobs_events_concatenates_streams_across_ids(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=43)
     fake_aap.seed("job_events", id=1, job=42, counter=1, event="playbook_on_play_start")
     fake_aap.seed("job_events", id=2, job=43, counter=2, event="playbook_on_play_start")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "events", "42", "43", "--format", "raw", "--columns", "counter"],
     )
@@ -841,7 +851,7 @@ def test_jobs_events_reads_ids_from_stdin(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=43)
     fake_aap.seed("job_events", id=1, job=42, counter=1, event="playbook_on_play_start")
     fake_aap.seed("job_events", id=2, job=43, counter=2, event="playbook_on_play_start")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "events", "--stdin", "--format", "raw", "--columns", "counter"],
         input="42\n43\n",
@@ -853,7 +863,7 @@ def test_jobs_events_reads_ids_from_stdin(fake_aap: Any) -> None:
 
 def test_jobs_events_rejects_mixed_positional_and_stdin(fake_aap: Any) -> None:
     _seed_running_job(fake_aap, job_id=42)
-    result = CliRunner().invoke(app, ["jobs", "events", "42", "--stdin"], input="43\n")
+    result = CliInvoker().invoke(app, ["jobs", "events", "42", "--stdin"], input="43\n")
     assert result.exit_code != 0
     assert "stdin" in (result.output + (result.stderr or "")).lower()
 
@@ -863,7 +873,7 @@ def test_jobs_events_continues_when_one_id_missing(fake_aap: Any) -> None:
     and emits a per-id error on stderr without aborting."""
     _seed_running_job(fake_aap, job_id=42)
     fake_aap.seed("job_events", id=1, job=42, counter=1, event="playbook_on_play_start")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app, ["jobs", "events", "9999", "42", "--format", "raw", "--columns", "counter"]
     )
     assert result.exit_code != 0
@@ -884,7 +894,7 @@ def test_jobs_events_multi_id_non_follow_emits_per_job_blocks(fake_aap: Any) -> 
     _seed_running_job(fake_aap, job_id=43)
     fake_aap.seed("job_events", id=1, job=42, counter=1, event="playbook_on_play_start")
     fake_aap.seed("job_events", id=2, job=43, counter=2, event="playbook_on_play_start")
-    result = CliRunner().invoke(
+    result = CliInvoker().invoke(
         app,
         ["jobs", "events", "42", "43", "--format", "json", "--columns", "counter"],
     )

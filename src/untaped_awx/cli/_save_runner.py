@@ -1,15 +1,11 @@
 """Shared save runner for top-level and per-resource AWX save commands."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
-import typer
-from untaped import OutputFormat
+from untaped import OutputFormat, echo, render_rows
 
 from untaped_awx.application import SaveResource, SaveResources
 from untaped_awx.cli._context import AwxContext
-from untaped_awx.cli._rendering import render_rows
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.errors import AwxApiError
 from untaped_awx.infrastructure.yaml_io import dump_resource, write_resource
@@ -29,16 +25,16 @@ def run_save_one(
     resource = SaveResource(ctx.repo, ctx.fk)(spec, name=name, scope=scope)
     comment = spec.fidelity_note if spec.fidelity != "full" else None
     if comment:
-        typer.echo(f"{spec.fidelity} save: {comment}", err=True)
+        echo(f"{spec.fidelity} save: {comment}", err=True)
     if output:
         write_resource(output, resource, header_comment=comment)
         return
     if fmt == "yaml":
         # Bypass row rendering: apply's read_resources rejects list-wrapped docs.
-        typer.echo(dump_resource(resource, header_comment=comment))
+        echo(dump_resource(resource, header_comment=comment))
         return
     envelope = resource.model_dump(exclude_none=True)
-    typer.echo(render_rows([envelope], fmt=fmt, columns=columns))
+    echo(render_rows([envelope], fmt=fmt, columns=columns))
 
 
 def run_save_batch(
@@ -62,7 +58,7 @@ def run_save_batch(
     out_dir.mkdir(parents=True, exist_ok=True)
     for outcome in outcomes:
         if outcome.action == "skipped":
-            typer.echo(f"skipping {outcome.kind}: {outcome.detail}", err=True)
+            echo(f"skipping {outcome.kind}: {outcome.detail}", err=True)
             continue
         if outcome.resource is None or outcome.filename is None:  # pragma: no cover
             raise AwxApiError(f"invalid save outcome for {outcome.kind}: missing resource")
@@ -71,10 +67,10 @@ def run_save_batch(
         text = dump_resource(outcome.resource, header_comment=outcome.header_comment)
         target.write_text(text)
         if print_paths:
-            typer.echo(str(target))
+            echo(str(target))
         else:
-            typer.echo("---")
-            typer.echo(text)
+            echo("---")
+            echo(text)
 
 
 def _assert_inside(parent: Path, target: Path) -> None:

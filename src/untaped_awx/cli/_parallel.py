@@ -6,8 +6,6 @@ need; each caller contributes only its unique mechanics (queue + print
 loop for track; ``WatchJob`` lambda for wait).
 """
 
-from __future__ import annotations
-
 import queue
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
