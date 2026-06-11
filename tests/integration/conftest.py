@@ -12,8 +12,7 @@ same way it does in a real invocation.
 from __future__ import annotations
 
 import pytest
-from untaped.api import PluginRegistry
-from untaped.plugins import register_plugins
+from untaped.testing import register_plugin_for_tests
 
 from untaped_awx.plugin import plugin as awx_plugin
 
@@ -21,4 +20,4 @@ from untaped_awx.plugin import plugin as awx_plugin
 @pytest.fixture(autouse=True)
 def _register_awx_settings(_reset_settings_cache: None) -> None:
     """Depends on the root reset fixture so registration happens after it."""
-    register_plugins(PluginRegistry(), [awx_plugin])
+    register_plugin_for_tests(awx_plugin)
