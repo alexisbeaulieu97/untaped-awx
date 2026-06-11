@@ -6,15 +6,15 @@ the generic use cases need. Commands construct the context inside a
 ``with`` block to ensure the HTTP client is closed.
 
 This module is the **only** place in ``untaped-awx`` that reads
-:class:`untaped.Settings`; everything downstream consumes the
-package-local :class:`AwxConfig`.
+core settings (via :func:`untaped.api.plugin_context`); everything
+downstream consumes the package-local :class:`AwxConfig`.
 """
 
 from contextlib import contextmanager
 from types import TracebackType
 from typing import TYPE_CHECKING
 
-from untaped import echo, get_config_section, get_core_settings, profile_override
+from untaped.api import PluginContext, echo, plugin_context
 
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.infrastructure import AwxClient, AwxConfig, AwxResourceCatalog
@@ -33,10 +33,10 @@ if TYPE_CHECKING:
 class AwxContext:
     """Holds wired-up dependencies for a single CLI invocation."""
 
-    def __init__(self) -> None:
-        settings = get_core_settings()
-        config = get_config_section("awx", AwxConfig)
-        self.client = AwxClient(config, http=settings.http)
+    def __init__(self, context: PluginContext | None = None) -> None:
+        context = context or plugin_context()
+        config = context.section("awx", AwxConfig)
+        self.client = AwxClient(config, http=context.http)
         self.repo = ResourceRepository(self.client, page_size=config.page_size)
         self.catalog = AwxResourceCatalog()
         self.fk = FkResolver(
@@ -68,12 +68,11 @@ class AwxContext:
 
 @contextmanager
 def open_context(profile: str | None = None) -> Iterator[AwxContext]:
-    with profile_override(profile):
-        ctx = AwxContext()
-        try:
-            yield ctx
-        finally:
-            ctx.close()
+    ctx = AwxContext(plugin_context(profile))
+    try:
+        yield ctx
+    finally:
+        ctx.close()
 
 
 def scope_for_command(

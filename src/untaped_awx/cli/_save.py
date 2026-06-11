@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 from cyclopts import App, Parameter
-from untaped import (
+from untaped.api import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,

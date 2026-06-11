@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from untaped import ConfigError
+from untaped.api import ConfigError
 
 from untaped_awx.domain import Metadata, Resource
 from untaped_awx.infrastructure.yaml_io import (

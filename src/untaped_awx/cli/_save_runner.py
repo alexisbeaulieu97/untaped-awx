@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from untaped import OutputFormat, echo, render_rows
+from untaped.api import OutputFormat, echo, render_rows
 
 from untaped_awx.application import SaveResource, SaveResources
 from untaped_awx.cli._context import AwxContext

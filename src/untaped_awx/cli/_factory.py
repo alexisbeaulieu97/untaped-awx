@@ -11,7 +11,7 @@ without editing the factory body.
 from collections.abc import Callable
 
 from cyclopts import App
-from untaped import create_app
+from untaped.api import create_app
 
 from untaped_awx.cli._apply import _add_apply
 from untaped_awx.cli._delete import _add_delete

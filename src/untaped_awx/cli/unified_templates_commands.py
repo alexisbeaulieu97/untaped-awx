@@ -24,7 +24,7 @@ virtual collection cannot satisfy.
 from typing import Annotated
 
 from cyclopts import Parameter
-from untaped import (
+from untaped.api import (
     ColumnsOption,
     FormatOption,
     OutputFormat,

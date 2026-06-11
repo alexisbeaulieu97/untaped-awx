@@ -11,7 +11,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from rich.console import Console
-from untaped import UntapedError
+from untaped.api import UntapedError
 
 from untaped_awx.application import StreamJobEvents, WatchJob
 from untaped_awx.application.ports import JobMonitor, RawHttpResourceClient

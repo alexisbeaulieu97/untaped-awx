@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from untaped import ConfigError, HttpError
+from untaped.api import ConfigError, HttpError
 
 from untaped_awx.errors import AwxApiError, BadRequest, Conflict, PermissionDenied
 from untaped_awx.infrastructure.errors import map_awx_errors, to_awx_error

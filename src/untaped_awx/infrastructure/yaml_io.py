@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from untaped import ConfigError
+from untaped.api import ConfigError
 
 from untaped_awx.domain import Resource
 

@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from cyclopts import App, Parameter
 from rich.console import Console
-from untaped import (
+from untaped.api import (
     ColumnsOption,
     FormatOption,
     ProfileOverrideOption,

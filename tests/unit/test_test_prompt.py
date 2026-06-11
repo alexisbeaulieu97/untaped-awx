@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
-from untaped import ConfigError, PromptChoice
+from untaped.api import ConfigError, PromptChoice
 
 from untaped_awx.domain.test_suite import VariableSpec
 from untaped_awx.infrastructure.test.prompt import UiPrompt

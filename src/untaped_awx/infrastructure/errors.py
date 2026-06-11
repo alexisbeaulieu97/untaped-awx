@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from untaped import ConfigError, HttpError, UntapedError
+from untaped.api import ConfigError, HttpError, UntapedError
 
 from untaped_awx.errors import (
     AwxApiError,

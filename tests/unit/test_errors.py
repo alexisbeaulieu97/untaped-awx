@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from untaped import HttpError, UntapedError
+from untaped.api import HttpError, UntapedError
 
 from untaped_awx.errors import (
     AwxApiError,
