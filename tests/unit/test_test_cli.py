@@ -27,12 +27,10 @@ def aap_config_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))

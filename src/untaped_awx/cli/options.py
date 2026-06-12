@@ -3,6 +3,23 @@
 from typing import Annotated
 
 from cyclopts import Parameter
+from untaped import raise_usage
+
+
+def resolve_max_depth(depth: int | None, recursive: bool) -> int | None:
+    """Translate the shared ``--depth`` / ``--recursive`` flag pair.
+
+    ``--depth N`` wins when set (``N > 0`` implies recursion);
+    ``--recursive`` alone is unlimited (``None``); neither caps the
+    traversal at ``0``. Used by every recursive inspector (``nodes``,
+    ``usage``) so the flag semantics can't drift between commands.
+    """
+    if depth is not None and depth < 0:
+        raise_usage("--depth must be non-negative")
+    if depth is not None:
+        return depth
+    return None if recursive else 0
+
 
 ByIdOption = Annotated[
     bool,
@@ -77,4 +94,5 @@ __all__ = [
     "OrganizationLookupOption",
     "OrganizationOption",
     "OrganizationStdinLookupOption",
+    "resolve_max_depth",
 ]

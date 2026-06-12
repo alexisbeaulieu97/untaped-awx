@@ -23,7 +23,6 @@ from typing import Annotated, Any, Literal
 
 from cyclopts import App, Parameter
 from untaped.api import (
-    ProfileOverrideOption,
     create_app,
     read_identifiers,
     report_errors,
@@ -86,10 +85,9 @@ def _add_membership_verb(
         organization: OrganizationOption = None,
         inventory: InventoryOption = None,
         inventory_organization: InventoryOrganizationOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         any_failed = False
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             member_ids_input = read_identifiers(list(members or []), stdin=stdin)
             parent_scope = scope_for_command(
                 ctx,

@@ -22,6 +22,7 @@ parameterised launch matrices against a job template.
 - Execution inspection: `awx jobs list|get|events|logs|wait`
 - Cross-kind discovery: `awx unified-templates`
 - Workflow inspection: `awx workflow-templates nodes`
+- Reverse lookup: `awx job-templates usage`, `awx workflow-templates usage`
 - Declarative launch checks: `awx test lint|render|run`
 
 ## Setup
@@ -489,6 +490,58 @@ With `--filter`, the filter is applied server-side on each
 `workflow_nodes` GET; combined with `--recursive` it applies at every
 BFS level, so a filter that excludes sub-workflow rows will prune
 them and stop the descent at that node.
+
+### `untaped awx job-templates usage` / `workflow-templates usage`
+
+The reverse of `nodes` — answers "which workflows run this template?",
+the impact-analysis question to ask before changing or deleting one.
+Lives on both template sub-apps; the sub-app picks the kind the
+identifier resolves against (a job template or a nested workflow), and
+each result row is one *containing* workflow, deduplicated. One
+filtered query per lookup (`workflow_job_template_nodes/
+?unified_job_template=<id>`) — no workflow enumeration.
+
+```bash
+# Direct parents only (the default). Default columns:
+# id,name,depth,node_count — ``node_count`` says how many nodes in
+# that workflow reference the template.
+untaped awx job-templates usage <name> [--by-id] [--organization ORG|--org ORG] \
+  --columns id --columns name --columns depth --columns node_count
+
+# Nested workflows reverse-lookup the same way.
+untaped awx workflow-templates usage <name>
+
+# Walk up the ancestry: parents of parents surface with increasing
+# ``depth`` (0 = direct parent, 1 = grandparent, …). ``--depth N`` for
+# N>0 implies ``--recursive``; ``--depth 0`` means "direct parents
+# only" (the default when neither flag is passed).
+untaped awx job-templates usage <name> --recursive
+untaped awx job-templates usage <name> --depth 1
+
+# Impact-analysis fan-out: which workflows would a change to any of
+# these templates touch? Dedup is per target, so ``sort -u`` collapses
+# shared parents across targets.
+untaped awx job-templates list --filter organization__name=Default -f raw -c name \
+  | untaped awx job-templates usage --stdin -f raw -c name \
+  | sort -u
+
+# Server-side filter: ``--filter KEY=VALUE`` (repeatable, Django-style)
+# narrows the node query at every ancestry level, e.g. scope the
+# containing workflows to one org.
+untaped awx job-templates usage <name> \
+  --filter workflow_job_template__organization__name=Default
+```
+
+Names follow the same org-scope rules as `get`; pass `--by-id` when
+every identifier is an AWX id. A template no workflow references
+prints an empty result and exits `0`. The ancestry walk is
+cycle-guarded by workflow id — mutually-nested workflows emit a
+`warning: cycle: workflow <id> already visited; skipping` line to
+stderr and stop there. A workflow reachable along several paths
+appears once, at its shallowest depth, with `node_count` counting only
+its direct references. With `--stdin`, a per-target failure (unknown
+template, lookup error) emits `warning: <identifier>: <exc>` to stderr
+and forces a non-zero exit; valid targets still emit their rows.
 
 ## Test suites — `untaped awx test`
 

@@ -83,12 +83,10 @@ def test_jobs_list_table_honours_global_ui_collection_view(
         """
         ui:
           collection_view: list
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     get_settings.cache_clear()

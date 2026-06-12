@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 from cyclopts import App, Parameter, validators
-from untaped.api import ColumnsOption, OutputFormat, ProfileOverrideOption, report_errors
+from untaped.api import ColumnsOption, OutputFormat, report_errors
 
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
 from untaped_awx.cli._apply_runner import run_apply
@@ -40,14 +40,13 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
         ] = 1,
         fmt: Annotated[OutputFormat, Parameter(name="--format", help="Output format.")] = "table",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """Apply a YAML file. Default is preview-only — pass ``--yes`` to write.
 
         Wrong-kind docs in the file are warned about and **never written** —
         this command is scoped to the kind of its parent sub-app.
         """
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             run_apply(
                 ctx,
                 file,

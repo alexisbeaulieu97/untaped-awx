@@ -119,7 +119,7 @@ def test_config_list_includes_registered_awx_settings() -> None:
 
 
 def test_config_list_redacts_awx_token(_isolate_config: Path) -> None:
-    _isolate_config.write_text("profiles:\n  default:\n    awx:\n      token: awx-secret\n")
+    _isolate_config.write_text("awx:\n  token: awx-secret\n")
     app = build_app(plugins=[awx_plugin])
 
     result = CliInvoker().invoke(

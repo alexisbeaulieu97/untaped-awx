@@ -67,8 +67,8 @@ class AwxContext:
 
 
 @contextmanager
-def open_context(profile: str | None = None) -> Iterator[AwxContext]:
-    ctx = AwxContext(plugin_context(profile))
+def open_context() -> Iterator[AwxContext]:
+    ctx = AwxContext(plugin_context())
     try:
         yield ctx
     finally:

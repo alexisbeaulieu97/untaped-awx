@@ -18,13 +18,11 @@ from untaped import (
     ConfigError,
     FormatOption,
     OutputFormat,
-    ProfileOverrideOption,
     create_app,
     echo,
     get_config_section,
     get_core_settings,
     parse_kv_pairs,
-    profile_override,
     raise_usage,
     read_identifiers,
     render_rows,
@@ -49,6 +47,7 @@ from untaped_awx.cli._save_runner import run_save_batch
 from untaped_awx.cli.options import OrganizationOption
 from untaped_awx.cli.test_commands import app as test_app
 from untaped_awx.cli.unified_templates_commands import app as unified_templates_app
+from untaped_awx.cli.usage_commands import register_usage_command
 from untaped_awx.cli.workflow_node_commands import register_nodes_command
 from untaped_awx.domain import Job, JobEvent
 from untaped_awx.infrastructure import AwxClient, AwxConfig
@@ -65,12 +64,11 @@ app = create_app(
 
 @app.command(name="ping")
 def ping_command(
-    profile: ProfileOverrideOption = None,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
 ) -> None:
     """Check control-plane health."""
-    with report_errors(), profile_override(profile):
+    with report_errors():
         settings = get_core_settings()
         config = get_config_section("awx", AwxConfig)
         with AwxClient(config, http=settings.http) as client:
@@ -106,7 +104,6 @@ def apply_command(
             ),
         ),
     ] = 1,
-    profile: ProfileOverrideOption = None,
     fmt: Annotated[
         OutputFormat,
         Parameter(name="--format", help="Result-table format."),
@@ -114,7 +111,7 @@ def apply_command(
     columns: ColumnsOption = None,
 ) -> None:
     """Apply YAML docs in dependency order. Default = preview; ``--yes`` writes."""
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         run_apply(
             ctx,
             file,
@@ -197,7 +194,6 @@ def save_top_command(
             help="Emit written filenames on stdout instead of the YAML envelopes for scripts.",
         ),
     ] = False,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """Bulk-save resources to a directory.
 
@@ -219,7 +215,7 @@ def save_top_command(
     filters = parse_kv_pairs(filter_, flag="--filter")
     _reject_duplicate_org_scope(organization, filters)
 
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         run_save_batch(
             ctx,
             out_dir=out_dir,
@@ -275,7 +271,6 @@ def jobs_list(
     ] = None,
     limit: Annotated[int | None, Parameter(name="--limit", help="Cap result count.")] = None,
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
-    profile: ProfileOverrideOption = None,
     fmt: Annotated[
         OutputFormat,
         Parameter(name=["--format", "-f"], help="Output format."),
@@ -286,7 +281,7 @@ def jobs_list(
     filters = parse_kv_pairs(filter_, flag="--filter")
     if status:
         filters["status"] = status
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         records = list(ListJobs(ctx.jobs)(kind=kind, params=filters, limit=limit))
     cols = list(columns) if columns else ["id", "name", "status"]
     echo(render_rows(records, fmt=fmt, columns=cols))
@@ -301,7 +296,6 @@ def jobs_get(
         Parameter(name="--stdin", negative="", help="Read job ids from stdin (one per line)."),
     ] = False,
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
-    profile: ProfileOverrideOption = None,
     fmt: Annotated[OutputFormat, Parameter(name=["--format", "-f"])] = "yaml",
     columns: ColumnsOption = None,
 ) -> None:
@@ -310,7 +304,7 @@ def jobs_get(
     # body — keeps the post-``with`` exit-code dispatch safe.
     records: list[dict[str, object]] = []
     any_failed = False
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
         records, any_failed = resolve_each(
             ids, lambda n: GetJob(ctx.jobs)(kind=kind, job_id=_as_job_id(n))
@@ -346,7 +340,6 @@ def jobs_events(
         ),
     ] = None,
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
-    profile: ProfileOverrideOption = None,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
 ) -> None:
@@ -371,7 +364,7 @@ def jobs_events(
     cols = list(columns) if columns else ["counter", "event", "host_name", "task"]
     # Hoisted so post-``with`` exit dispatch is safe regardless of body outcome.
     any_failed = False
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
         show_breadcrumb = len(ids) > 1
 
@@ -510,7 +503,6 @@ def jobs_logs(
         Parameter(name="--format", help="Output format (json|yaml|table|raw)."),
     ] = "raw",
     columns: ColumnsOption = None,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """Print the stdout of one or more jobs. Supports follow / tail / grep.
 
@@ -527,7 +519,7 @@ def jobs_logs(
             raise_usage(f"--grep {grep!r} is not a valid regex: {exc}")
     # Hoisted so post-``with`` exit dispatch is safe regardless of body outcome.
     any_failed = False
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
         show_breadcrumb = len(ids) > 1
         cols = list(columns) if columns else None
@@ -566,7 +558,6 @@ def jobs_wait(
         Parameter(name=["--format", "-f"], help="Output format (json|yaml|table|raw)."),
     ] = "table",
     columns: ColumnsOption = None,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """Block until each named job reaches a terminal state.
 
@@ -578,7 +569,7 @@ def jobs_wait(
     records: list[dict[str, object]] = []
     any_failed = False
     timed_out: list[int] = []
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         ids = read_identifiers(list(job_ids or []), stdin=stdin)
 
         def _wait_one(n: str) -> dict[str, object]:
@@ -616,4 +607,6 @@ for spec in ALL_SPECS:
     sub_app = make_resource_app(spec)
     if spec.kind == "WorkflowJobTemplate":
         register_nodes_command(sub_app)
+    if spec.kind in {"JobTemplate", "WorkflowJobTemplate"}:
+        register_usage_command(sub_app, spec)
     app.command(sub_app, name=spec.cli_name)

@@ -14,7 +14,6 @@ from rich.console import Console
 from untaped.api import (
     ColumnsOption,
     FormatOption,
-    ProfileOverrideOption,
     UntapedError,
     echo,
     raise_usage,
@@ -164,7 +163,6 @@ def _add_launch(app: App, spec: AwxResourceSpec) -> None:  # noqa: C901
         ] = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """Launch one or more resources and (optionally) wait for each job."""
         supplied: dict[str, object] = {
@@ -183,7 +181,7 @@ def _add_launch(app: App, spec: AwxResourceSpec) -> None:  # noqa: C901
         # Stderr console for ``--track``: ANSI when stderr is a TTY,
         # plain text when redirected (CI logs, piped through ``tee``).
         track_console = Console(stderr=True, highlight=False)
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             scope = scope_for_command(ctx, organization, spec)
             payload = _build_launch_payload(
                 accepts=accepts,
