@@ -42,9 +42,9 @@ untaped config set awx.default_organization Engineering
 untaped awx ping
 ```
 
-Every AWX command that reads profile settings accepts command-local
-`--profile <name>`, so the selector can stay next to the command:
-`untaped awx ping --profile prod`. The root form still works too:
+Profile selection is the root `--profile <name>` option contributed by the
+[`untaped-profile`](https://github.com/alexisbeaulieu97/untaped-profile)
+plugin (install it to use profiles); place it before the command group:
 `untaped --profile prod awx ping`.
 
 The token is treated as a secret (`SecretStr`): `untaped config list`
@@ -647,21 +647,21 @@ client update.
 
 ```bash
 # Save from staging.
-untaped awx job-templates save "Deploy app" --profile staging \
+untaped --profile staging awx job-templates save "Deploy app" \
   > deploy-app.yml
 
 # Preview against prod (no write).
-untaped awx job-templates apply deploy-app.yml --profile prod
+untaped --profile prod awx job-templates apply deploy-app.yml
 
 # Looks right? Apply for real.
-untaped awx job-templates apply deploy-app.yml --profile prod --yes
+untaped --profile prod awx job-templates apply deploy-app.yml --yes
 ```
 
 Or back up and restore in bulk:
 
 ```bash
-untaped awx save --out-dir backup-staging/ --all-kinds --profile staging
-untaped awx apply backup-staging/ --yes --profile prod
+untaped --profile staging awx save --out-dir backup-staging/ --all-kinds
+untaped --profile prod awx apply backup-staging/ --yes
 ```
 
 Apply ordering ensures Organizations and Credentials land before the

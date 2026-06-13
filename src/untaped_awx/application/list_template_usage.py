@@ -19,7 +19,8 @@ depth-0 workflow that led there, and so on.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from untaped_awx.application.get_resource import resolve_identity
 from untaped_awx.application.ports import (
@@ -27,6 +28,24 @@ from untaped_awx.application.ports import (
     WorkflowNodeRepository,
 )
 from untaped_awx.domain import ResourceSpec, WorkflowUsage
+
+
+def _aggregate_references(rows: Iterable[dict[str, Any]]) -> dict[int, tuple[str | None, int]]:
+    """Aggregate workflow-node rows into per-workflow ``(name, reference-count)``.
+
+    AWX repeats identical ``summary_fields`` on every node row of a workflow,
+    so the name is taken from the first row seen; server order is preserved.
+    """
+    usage: dict[int, tuple[str | None, int]] = {}
+    for raw in rows:
+        wf_id = int(raw["workflow_job_template"])
+        if wf_id not in usage:
+            summary = raw.get("summary_fields") or {}
+            name = (summary.get("workflow_job_template") or {}).get("name")
+            usage[wf_id] = (name, 0)
+        name, count = usage[wf_id]
+        usage[wf_id] = (name, count + 1)
+    return usage
 
 
 class ListTemplateUsage:
@@ -58,22 +77,10 @@ class ListTemplateUsage:
         while queue:
             child_id, depth, ancestors = queue.popleft()
             new_ancestors = ancestors | {child_id}
-            # Count node rows per containing workflow, preserving server
-            # order; the workflow's name comes off its first row (AWX
-            # repeats identical summary_fields on every row of a workflow).
-            counts: dict[int, int] = {}
-            names: dict[int, str | None] = {}
-            for raw in self._nodes.list_references(
-                unified_job_template=child_id,
-                params=filters,
-            ):
-                wf_id = int(raw["workflow_job_template"])
-                if wf_id not in counts:
-                    summary = raw.get("summary_fields") or {}
-                    names[wf_id] = (summary.get("workflow_job_template") or {}).get("name")
-                    counts[wf_id] = 0
-                counts[wf_id] += 1
-            for wf_id, count in counts.items():
+            references = _aggregate_references(
+                self._nodes.list_references(unified_job_template=child_id, params=filters)
+            )
+            for wf_id, (name, count) in references.items():
                 if wf_id in new_ancestors:
                     self._warn(
                         f"cycle: workflow {wf_id} already visited; skipping",
@@ -82,9 +89,7 @@ class ListTemplateUsage:
                 if wf_id in listed:
                     continue
                 listed.add(wf_id)
-                out.append(
-                    WorkflowUsage(id=wf_id, name=names[wf_id], depth=depth, node_count=count)
-                )
+                out.append(WorkflowUsage(id=wf_id, name=name, depth=depth, node_count=count))
                 if max_depth is not None and depth + 1 > max_depth:
                     continue
                 queue.append((wf_id, depth + 1, new_ancestors))
