@@ -5,6 +5,10 @@ For user-facing setup and command reference, see
 [`docs/awx.md`](docs/awx.md). For shared core APIs and plugin plumbing, see
 the [`untaped` core repo](https://github.com/alexisbeaulieu97/untaped).
 
+## Maintenance Rules
+
+- Keep this `AGENTS.md` and the packaged `src/untaped_awx/skills/untaped-awx/SKILL.md` current with command, settings, workflow, and plugin-contract changes.
+
 ## `AwxConfig` — package-local config
 
 `AwxConfig` (`infrastructure/config.py`) is the package-local config struct
