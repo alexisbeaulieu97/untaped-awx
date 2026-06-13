@@ -116,7 +116,8 @@ class FakeAap:
         return _err(404, f"no fake handler for {method} {path}")
 
     def _list(self, api_path: str, params: dict[str, str]) -> httpx.Response:
-        records = self._apply_filters(list(self.store[api_path].values()), params)
+        store_collection = _TOP_PATH_STORE.get(api_path, api_path)
+        records = self._apply_filters(list(self.store[store_collection].values()), params)
         page = int(params.get("page", "1"))
         page_size = int(params.get("page_size", "200"))
         start = (page - 1) * page_size
@@ -359,6 +360,15 @@ _SUB_PATH_STORE: dict[tuple[str, str], str] = {
     ("groups", "children"): "groups",
 }
 
+# Top-level URLs that are collection-wide views of records seeded under
+# another name. ``GET /workflow_job_template_nodes/`` returns the same
+# node records that ``GET /workflow_job_templates/<id>/workflow_nodes/``
+# serves (seeded under ``self.store["workflow_nodes"]``), matching real
+# AWX where both endpoints expose one WorkflowJobTemplateNode table.
+_TOP_PATH_STORE: dict[str, str] = {
+    "workflow_job_template_nodes": "workflow_nodes",
+}
+
 # Nested sub-paths whose back-reference is *not* the polymorphic
 # ``unified_job_template`` column. See ``_sub_list`` for the reason —
 # without skipping the OR clause, a recursion test where workflow A
@@ -507,12 +517,10 @@ def aap_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))

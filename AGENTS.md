@@ -11,7 +11,7 @@ the [`untaped` core repo](https://github.com/alexisbeaulieu97/untaped).
 (`base_url`, `token`, `api_prefix`, `default_organization`, `page_size`).
 The plugin manifest declares this model as the `awx` profile settings
 section, and the CLI composition root (`cli/_context.py`) reads it with
-`plugin_context(profile).section("awx", AwxConfig)`.
+`plugin_context().section("awx", AwxConfig)`.
 Plugin registration and CLI composition roots may import `AwxConfig`;
 infrastructure clients receive it as package-local configuration. Domain and
 application code stay config-free and depend on narrow models/ports instead.
@@ -26,11 +26,11 @@ workflow changes. The plugin object must expose `id = "awx"`, literal
 `test_plugin_import_keeps_cli_module_off_the_startup_path`). Plugins import
 the SDK surface from `untaped.api`, never from core internals.
 
-AWX commands that read settings expose the core command-local
-`ProfileOverrideOption` as `--profile` and pass it into
-`open_context(profile)`, which resolves a frozen core `PluginContext` via
-`plugin_context(profile)`. Commands that do not read settings, such as
-`awx test list`, do not expose a no-op profile selector.
+Profile selection happens at the root: core plugin API v4's root
+`--profile` option works in any token position (the core strips the
+token and re-dispatches), so AWX commands expose no command-local
+`--profile`. Commands that read settings call `open_context()`, which
+resolves a frozen core `PluginContext` via the bare `plugin_context()`.
 
 Adding a new field is a three-place edit: `AwxConfig`, the call site that
 needs the value, and tests for loading/env override where relevant.

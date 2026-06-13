@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 from untaped.settings import get_settings
 from untaped.testing import CliInvoker
 
@@ -74,12 +73,10 @@ def test_job_templates_list_table_honours_global_ui_collection_view(
         """
         ui:
           collection_view: list
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     get_settings.cache_clear()
@@ -101,12 +98,10 @@ def test_job_templates_list_raw_ignores_unknown_global_ui_theme(
         """
         ui:
           theme: missing
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     get_settings.cache_clear()
@@ -122,26 +117,25 @@ def test_job_templates_list_raw_ignores_unknown_global_ui_theme(
     assert "\x1b[" not in result.output
 
 
-def test_job_templates_list_profile_flag_reads_named_profile(
+def test_job_templates_list_rejects_command_local_profile_flag(
     fake_aap: Any,
     aap_config: Path,
 ) -> None:
+    """Profile selection belongs to the untaped-profile plugin.
+
+    Factory-built commands do not expose a local ``--profile``, so
+    passing one directly to the plugin app is an unknown-option error
+    (exit 2), and the config file is left untouched.
+    """
     aap_config.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://wrong.example.com
-              token: default-token
-              api_prefix: /api/v2/
-          stage:
-            awx:
-              base_url: https://aap.example.com
-              token: stage-token
-              api_prefix: /api/v2/
-        active: default
+        awx:
+          base_url: https://aap.example.com
+          token: default-token
+          api_prefix: /api/v2/
         """
     )
+    original = aap_config.read_text()
     _seed_basic(fake_aap)
 
     result = CliInvoker().invoke(
@@ -158,9 +152,8 @@ def test_job_templates_list_profile_flag_reads_named_profile(
         ],
     )
 
-    assert result.exit_code == 0, result.output
-    assert result.stdout.strip() == "deploy"
-    assert yaml.safe_load(aap_config.read_text())["active"] == "default"
+    assert result.exit_code == 2, result.output
+    assert aap_config.read_text() == original
 
 
 def test_list_with_names_flips_fk_ids_to_names(seeded_default_org: Any) -> None:

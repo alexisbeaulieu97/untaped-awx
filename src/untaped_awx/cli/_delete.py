@@ -8,7 +8,6 @@ from untaped.api import (
     ColumnsOption,
     ConfigError,
     FormatOption,
-    ProfileOverrideOption,
     UntapedError,
     echo,
     raise_usage,
@@ -58,7 +57,6 @@ def _add_delete(app: App, spec: AwxResourceSpec) -> None:
         by_id: ByIdOption = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """Delete one or more resources by name, or by explicit AWX id.
 
@@ -74,7 +72,7 @@ def _add_delete(app: App, spec: AwxResourceSpec) -> None:
         if stdin and not yes and not dry_run:
             raise_usage("--stdin requires --yes (skip confirmation) or --dry-run (preview only)")
         rows: list[dict[str, Any]] = []
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             ids = read_identifiers(list(names or []), stdin=stdin)
             scope = scope_for_command(
                 ctx,

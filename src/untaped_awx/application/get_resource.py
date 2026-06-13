@@ -90,3 +90,25 @@ def parse_resource_id(identifier: str) -> int:
     if not identifier.isdecimal():
         raise ConfigError(f"not a numeric id: {identifier!r}")
     return int(identifier)
+
+
+def resolve_identity(
+    resources: ResourceClient,
+    spec: ResourceSpec,
+    identifier: str,
+    *,
+    scope: dict[str, str] | None = None,
+    by_id: bool = False,
+) -> int:
+    """Resolve a CLI identifier to an AWX id.
+
+    Names resolve via ``find_by_identity`` (honouring ``scope``); numeric
+    ids are accepted only in explicit ``by_id`` mode, so a resource whose
+    *name* is numeric never gets shadowed by an id lookup.
+    """
+    if by_id:
+        return parse_resource_id(identifier)
+    record = resources.find_by_identity(spec, name=identifier, scope=scope)
+    if record is None:
+        raise ResourceNotFound(spec.kind, {"name": identifier, **(scope or {})})
+    return record.id

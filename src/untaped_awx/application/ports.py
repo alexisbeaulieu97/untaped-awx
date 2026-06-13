@@ -427,9 +427,11 @@ class UnifiedTemplateRepository(Protocol):
 
 
 class WorkflowNodeRepository(Protocol):
-    """Read access to the nodes of a single ``WorkflowJobTemplate``.
+    """Read access to workflow-job-template nodes.
 
-    Wraps ``/api/v2/workflow_job_templates/<id>/workflow_nodes/`` — the
+    Wraps the node collection from both directions: per-workflow via
+    ``/api/v2/workflow_job_templates/<id>/workflow_nodes/`` and
+    collection-wide via ``/api/v2/workflow_job_template_nodes/`` — the
     DAG of unified-job-template references that AWX executes when the
     workflow runs. Returned dicts carry the full AWX shape (including
     ``summary_fields``) so the use case can flatten the referenced
@@ -443,6 +445,19 @@ class WorkflowNodeRepository(Protocol):
         params: dict[str, str] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Walk every node of ``workflow_id``.
+
+        ``params`` are forwarded verbatim to the AWX API as query-string
+        parameters (Django-style filters).
+        """
+        ...
+
+    def list_references(
+        self,
+        *,
+        unified_job_template: int,
+        params: dict[str, str] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Walk every node (across all workflows) referencing the template.
 
         ``params`` are forwarded verbatim to the AWX API as query-string
         parameters (Django-style filters).

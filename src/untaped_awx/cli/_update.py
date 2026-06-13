@@ -6,7 +6,6 @@ from cyclopts import App, Parameter
 from untaped.api import (
     ColumnsOption,
     FormatOption,
-    ProfileOverrideOption,
     echo,
     render_rows,
     report_errors,
@@ -34,10 +33,9 @@ def _add_update(app: App, spec: AwxResourceSpec) -> None:
         ] = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """Trigger an SCM sync (Project)."""
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             scope = scope_for_command(ctx, organization, spec)
             job = RunAction(ctx.repo)(spec, name=name, action="update", scope=scope, by_id=by_id)
             if wait:

@@ -13,11 +13,9 @@ from cyclopts import App, Parameter
 from untaped import (
     ColumnsOption,
     FormatOption,
-    ProfileOverrideOption,
     UntapedError,
     echo,
     parse_kv_pairs,
-    raise_usage,
     read_identifiers,
     render_rows,
     report_errors,
@@ -25,7 +23,7 @@ from untaped import (
 
 from untaped_awx.application import ListWorkflowNodes
 from untaped_awx.cli._context import open_context, scope_for_command
-from untaped_awx.cli.options import ByIdOption, OrganizationOption
+from untaped_awx.cli.options import ByIdOption, OrganizationOption, resolve_max_depth
 from untaped_awx.domain import WorkflowNode, WorkflowNodeType
 from untaped_awx.infrastructure.specs.workflow import WORKFLOW_JOB_TEMPLATE_SPEC
 
@@ -109,21 +107,13 @@ def register_nodes_command(parent: App) -> None:
         ] = None,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """List the nodes (contents) of one or more workflow job templates."""
-        if depth is not None and depth < 0:
-            raise_usage("--depth must be non-negative")
-        if depth is not None:
-            max_depth: int | None = depth
-        elif recursive:
-            max_depth = None
-        else:
-            max_depth = 0
+        max_depth = resolve_max_depth(depth, recursive)
 
         nodes: list[WorkflowNode] = []
         any_failed = False
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             roots = read_identifiers(list(identifiers or []), stdin=stdin)
             filters = parse_kv_pairs(filter_, flag="--filter")
             scope = scope_for_command(ctx, organization, WORKFLOW_JOB_TEMPLATE_SPEC)

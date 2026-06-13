@@ -20,14 +20,12 @@ def _reset_settings_cache() -> Iterator[None]:
 def _write_config(tmp_path: Path, *, api_prefix: str | None = None) -> Path:
     cfg = tmp_path / "config.yml"
     body = """
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
+        awx:
+          base_url: https://aap.example.com
+          token: secret
         """
     if api_prefix is not None:
-        body += f"      api_prefix: {api_prefix}\n"
+        body += f"  api_prefix: {api_prefix}\n"
     cfg.write_text(body)
     return cfg
 
@@ -70,12 +68,10 @@ def test_ping_table_honours_global_ui_collection_view(
         """
         ui:
           collection_view: list
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
@@ -96,43 +92,32 @@ def test_ping_table_honours_global_ui_collection_view(
     assert not any(ch in result.stdout for ch in "╭╮╰╯┌┐└┘│─")
 
 
-def test_ping_profile_flag_reads_named_profile(
+def test_ping_rejects_command_local_profile_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Profile selection belongs to the untaped-profile plugin.
+
+    Commands do not expose a local ``--profile``, so passing one
+    directly to the plugin app is an unknown-option error (exit 2).
+    """
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://wrong.example.com
-              token: default-token
-              api_prefix: /api/v2/
-          stage:
-            awx:
-              base_url: https://aap.example.com
-              token: stage-token
-              api_prefix: /api/v2/
-        active: default
+        awx:
+          base_url: https://aap.example.com
+          token: default-token
+          api_prefix: /api/v2/
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
 
-    with respx.mock(base_url="https://aap.example.com", assert_all_called=False) as mock:
-        mock.get("/api/v2/ping/").mock(
-            return_value=httpx.Response(
-                200,
-                json={"version": "4.5.0", "active_node": "controller-1"},
-            )
-        )
-        result = CliInvoker().invoke(
-            app,
-            ["ping", "--profile", "stage", "--format", "raw", "--columns", "version"],
-        )
+    result = CliInvoker().invoke(
+        app,
+        ["ping", "--profile", "stage", "--format", "raw", "--columns", "version"],
+    )
 
-    assert result.exit_code == 0, result.output
-    assert result.stdout.strip() == "4.5.0"
+    assert result.exit_code == 2, result.output
 
 
 def test_ping_requires_base_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -158,13 +143,11 @@ def test_list_does_not_auto_apply_default_organization(
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
-              default_organization: Default
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
+          default_organization: Default
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
@@ -201,12 +184,10 @@ def test_list_filter_passes_through_to_awx(tmp_path: Path, monkeypatch: pytest.M
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
@@ -248,12 +229,10 @@ def test_list_filter_rejects_malformed_entry(
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        profiles:
-          default:
-            awx:
-              base_url: https://aap.example.com
-              token: secret
-              api_prefix: /api/v2/
+        awx:
+          base_url: https://aap.example.com
+          token: secret
+          api_prefix: /api/v2/
         """
     )
     monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))

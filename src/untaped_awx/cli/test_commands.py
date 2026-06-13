@@ -8,7 +8,6 @@ from cyclopts import Parameter, validators
 from untaped.api import (
     ColumnsOption,
     FormatOption,
-    ProfileOverrideOption,
     create_app,
     echo,
     parse_kv_pairs,
@@ -166,7 +165,6 @@ def run_command(
     ] = False,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """Render, resolve, launch and report on one or more test files."""
     from untaped_awx.application import RunAction, WatchJob  # noqa: PLC0415
@@ -177,7 +175,7 @@ def run_command(
     files = _expand_paths(paths)
     case_filter = set(cases) if cases else None
 
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         suites = _load_suites(
             files,
             cli_vars=cli_vars,
@@ -283,7 +281,6 @@ def validate_command(
     var: _VAR_OPT = None,
     vars_file: _VARS_FILE_OPT = None,
     non_interactive: _NON_INTERACTIVE_OPT = False,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """Render + parse + resolve each case; report errors without launching."""
     from untaped_awx.application.test.resolver import ResolveCasePayload  # noqa: PLC0415
@@ -291,7 +288,7 @@ def validate_command(
     cli_vars = parse_kv_pairs(var, flag="--var")
     files = _expand_paths(paths)
 
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         suites = _load_suites(
             files,
             cli_vars=cli_vars,

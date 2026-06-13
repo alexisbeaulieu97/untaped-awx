@@ -21,6 +21,7 @@ from untaped_awx.domain.workflow_node import (
     WorkflowNodeType,
     normalise_unified_job_type,
 )
+from untaped_awx.domain.workflow_usage import WorkflowUsage
 
 __all__ = [
     "API_VERSION",
@@ -45,6 +46,7 @@ __all__ = [
     "ServerRecord",
     "WorkflowNode",
     "WorkflowNodeType",
+    "WorkflowUsage",
     "WritePayload",
     "normalise_unified_job_type",
 ]

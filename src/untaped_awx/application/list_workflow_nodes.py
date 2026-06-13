@@ -20,13 +20,12 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any
 
-from untaped_awx.application.get_resource import parse_resource_id
+from untaped_awx.application.get_resource import resolve_identity
 from untaped_awx.application.ports import (
     ResourceClient,
     WorkflowNodeRepository,
 )
 from untaped_awx.domain import ResourceSpec, WorkflowNode, normalise_unified_job_type
-from untaped_awx.errors import ResourceNotFound
 
 
 class ListWorkflowNodes:
@@ -51,7 +50,7 @@ class ListWorkflowNodes:
         max_depth: int | None = 0,
         filters: dict[str, str] | None = None,
     ) -> list[WorkflowNode]:
-        root_id = self._resolve(spec, identifier, scope=scope, by_id=by_id)
+        root_id = resolve_identity(self._resources, spec, identifier, scope=scope, by_id=by_id)
         out: list[WorkflowNode] = []
         listed: set[int] = {root_id}
         queue: deque[tuple[int, int, frozenset[int]]] = deque([(root_id, 0, frozenset())])
@@ -78,21 +77,6 @@ class ListWorkflowNodes:
                 listed.add(child_id)
                 queue.append((child_id, depth + 1, new_ancestors))
         return out
-
-    def _resolve(
-        self,
-        spec: ResourceSpec,
-        identifier: str,
-        *,
-        scope: dict[str, str] | None,
-        by_id: bool,
-    ) -> int:
-        if by_id:
-            return parse_resource_id(identifier)
-        record = self._resources.find_by_identity(spec, name=identifier, scope=scope)
-        if record is None:
-            raise ResourceNotFound(spec.kind, {"name": identifier, **(scope or {})})
-        return record.id
 
 
 def _build_node(raw: dict[str, Any], *, workflow_id: int, depth: int) -> WorkflowNode:

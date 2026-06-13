@@ -6,7 +6,6 @@ from cyclopts import App, Parameter
 from untaped.api import (
     ColumnsOption,
     FormatOption,
-    ProfileOverrideOption,
     echo,
     parse_kv_pairs,
     raise_usage,
@@ -74,7 +73,6 @@ def _add_list(app: App, spec: AwxResourceSpec) -> None:
         ] = False,
         fmt: FormatOption = "table",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """List resources, optionally restricted to identifiers from stdin.
 
@@ -93,7 +91,7 @@ def _add_list(app: App, spec: AwxResourceSpec) -> None:
             raise_usage("--stdin cannot be combined with --search/--filter/--limit")
         records: list[dict[str, Any]] = []
         any_failed = False
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             if stdin:
                 ids = read_identifiers([], stdin=True)
                 scope = scope_for_command(

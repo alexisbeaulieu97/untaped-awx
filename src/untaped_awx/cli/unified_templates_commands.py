@@ -28,7 +28,6 @@ from untaped.api import (
     ColumnsOption,
     FormatOption,
     OutputFormat,
-    ProfileOverrideOption,
     create_app,
     echo,
     parse_kv_pairs,
@@ -81,7 +80,6 @@ def list_command(
     limit: Annotated[int | None, Parameter(name="--limit", help="Cap result count.")] = None,
     fmt: FormatOption = "table",
     columns: ColumnsOption = None,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """List Unified Job Templates (alphabetical by name)."""
     filters = parse_kv_pairs(filter_, flag="--filter")
@@ -91,7 +89,7 @@ def list_command(
                 "pass --type or --filter type=…, not both — they collide on the same param",
             )
         filters["type"] = type_
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         records = list(BrowseUnifiedTemplates(ctx.ujts)(params=filters, limit=limit))
     cols = list(columns) if columns else list(_DEFAULT_LIST_COLUMNS)
     echo(render_rows(records, fmt=fmt, columns=cols))
@@ -115,12 +113,11 @@ def get_command(
     ] = False,
     fmt: Annotated[OutputFormat, Parameter(name=["--format", "-f"])] = "yaml",
     columns: ColumnsOption = None,
-    profile: ProfileOverrideOption = None,
 ) -> None:
     """Fetch one or more Unified Job Templates by numeric id."""
     records: list[dict[str, object]] = []
     missing: list[str] = []
-    with report_errors(), open_context(profile) as ctx:
+    with report_errors(), open_context() as ctx:
         identifiers = read_identifiers(list(ids or []), stdin=stdin)
         for raw in identifiers:
             if not raw.isdecimal():

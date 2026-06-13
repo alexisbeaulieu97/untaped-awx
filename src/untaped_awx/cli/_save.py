@@ -7,7 +7,6 @@ from cyclopts import App, Parameter
 from untaped.api import (
     ColumnsOption,
     FormatOption,
-    ProfileOverrideOption,
     report_errors,
 )
 
@@ -35,7 +34,6 @@ def _add_save(app: App, spec: AwxResourceSpec) -> None:
         inventory_organization: InventoryOrganizationOption = None,
         fmt: FormatOption = "yaml",
         columns: ColumnsOption = None,
-        profile: ProfileOverrideOption = None,
     ) -> None:
         """Dump the resource as a portable YAML envelope.
 
@@ -47,7 +45,7 @@ def _add_save(app: App, spec: AwxResourceSpec) -> None:
         non-yaml formats only — yaml emits the bare envelope unfiltered
         so the round-trip into ``apply`` stays intact.
         """
-        with report_errors(), open_context(profile) as ctx:
+        with report_errors(), open_context() as ctx:
             scope = scope_for_command(
                 ctx,
                 organization,
