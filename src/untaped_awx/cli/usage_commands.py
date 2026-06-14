@@ -108,7 +108,11 @@ def register_usage_command(parent: App, spec: AwxResourceSpec) -> None:
         usages: list[WorkflowUsage] = []
         any_failed = False
         with report_errors(), open_context() as ctx:
-            targets = read_identifiers(list(identifiers or []), stdin=stdin)
+            targets = read_identifiers(
+                list(identifiers or []),
+                stdin=stdin,
+                id_field="id" if by_id else spec.identity_keys[0],
+            )
             filters = parse_kv_pairs(filter_, flag="--filter")
             scope = scope_for_command(ctx, organization, spec)
             use = ListTemplateUsage(
@@ -133,6 +137,6 @@ def register_usage_command(parent: App, spec: AwxResourceSpec) -> None:
                     any_failed = True
         rows = [u.model_dump() for u in usages]
         cols = list(columns) if columns else list(_DEFAULT_COLUMNS)
-        echo(render_rows(rows, fmt=fmt, columns=cols))
+        echo(render_rows(rows, fmt=fmt, columns=cols, kind="awx.template-usage"))
         if any_failed:
             raise SystemExit(1)

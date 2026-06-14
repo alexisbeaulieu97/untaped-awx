@@ -44,7 +44,7 @@ def run_apply(
     outcomes = ApplyFile(apply_one, reader, ctx.catalog, ctx.fk, parallel=parallel)(
         file, write=write, fail_fast=fail_fast
     )
-    echo(render_rows(outcome_rows(outcomes), fmt=fmt, columns=columns))
+    echo(render_rows(outcome_rows(outcomes), fmt=fmt, columns=columns, kind="awx.apply-outcome"))
     if not write:
         for outcome in outcomes:
             for line in diff_lines(outcome):

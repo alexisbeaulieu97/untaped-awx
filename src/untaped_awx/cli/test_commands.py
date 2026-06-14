@@ -215,6 +215,7 @@ def run_command(
                 [r.model_dump() for r in outcome.results],
                 fmt=fmt,
                 columns=columns,
+                kind="awx.test-result",
             )
         )
         if outcome.exit_code() != 0:
@@ -271,7 +272,7 @@ def list_command(
         rows: list[dict[str, Any]] = [_test_suite_row(suite) for suite in suites]
     else:
         rows = [_test_case_row(suite, case_name) for suite in suites for case_name in suite.cases]
-    echo(render_rows(rows, fmt=fmt, columns=columns))
+    echo(render_rows(rows, fmt=fmt, columns=columns, kind="awx.test-case"))
 
 
 # ---- validate ------------------------------------------------------------

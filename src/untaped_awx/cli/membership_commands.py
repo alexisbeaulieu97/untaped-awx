@@ -88,7 +88,13 @@ def _add_membership_verb(
     ) -> None:
         any_failed = False
         with report_errors(), open_context() as ctx:
-            member_ids_input = read_identifiers(list(members or []), stdin=stdin)
+            assert ref.kind is not None  # guarded by register_membership_subapp
+            member_spec = ctx.catalog.get(ref.kind)
+            member_ids_input = read_identifiers(
+                list(members or []),
+                stdin=stdin,
+                id_field="id" if by_id else member_spec.identity_keys[0],
+            )
             parent_scope = scope_for_command(
                 ctx,
                 organization,
@@ -100,8 +106,6 @@ def _add_membership_verb(
             parent_rec = getter.by_identifier(spec, parent, scope=parent_scope, by_id=by_id)
             parent_id = int(parent_rec["id"])
 
-            assert ref.kind is not None  # guarded by register_membership_subapp
-            member_spec = ctx.catalog.get(ref.kind)
             member_scope = _member_scope(parent_rec, ref)
             resolved_ids, any_failed = resolve_each(
                 member_ids_input,

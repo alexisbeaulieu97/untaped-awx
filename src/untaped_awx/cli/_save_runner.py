@@ -34,7 +34,7 @@ def run_save_one(
         echo(dump_resource(resource, header_comment=comment))
         return
     envelope = resource.model_dump(exclude_none=True)
-    echo(render_rows([envelope], fmt=fmt, columns=columns))
+    echo(render_rows([envelope], fmt=fmt, columns=columns, kind="awx.document"))
 
 
 def run_save_batch(

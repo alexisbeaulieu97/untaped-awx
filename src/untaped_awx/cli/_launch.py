@@ -191,7 +191,9 @@ def _add_launch(app: App, spec: AwxResourceSpec) -> None:  # noqa: C901
                 fk=ctx.fk,
                 org_scope=scope,
             )
-            ids = read_identifiers(list(names or []), stdin=stdin)
+            ids = read_identifiers(
+                list(names or []), stdin=stdin, id_field="id" if by_id else spec.identity_keys[0]
+            )
             # Launch phase — every launch is one HTTP POST returning an
             # in-flight Job; sequential keeps the per-id try/except simple
             # and the order of stderr error lines stable.
@@ -245,7 +247,11 @@ def _add_launch(app: App, spec: AwxResourceSpec) -> None:  # noqa: C901
                         echo(f"error: {n}: {exc}", err=True)
                         any_failed = True
         if jobs:
-            echo(render_rows([j.model_dump() for j in jobs], fmt=fmt, columns=columns))
+            echo(
+                render_rows(
+                    [j.model_dump() for j in jobs], fmt=fmt, columns=columns, kind="awx.job"
+                )
+            )
         if track and any(j.status != "successful" for j in jobs):
             # --track promises CI-friendly exit codes: anything other than a
             # clean ``successful`` (failed/error/canceled, or still-running

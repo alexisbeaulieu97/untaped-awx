@@ -114,7 +114,11 @@ def register_nodes_command(parent: App) -> None:
         nodes: list[WorkflowNode] = []
         any_failed = False
         with report_errors(), open_context() as ctx:
-            roots = read_identifiers(list(identifiers or []), stdin=stdin)
+            roots = read_identifiers(
+                list(identifiers or []),
+                stdin=stdin,
+                id_field="id" if by_id else WORKFLOW_JOB_TEMPLATE_SPEC.identity_keys[0],
+            )
             filters = parse_kv_pairs(filter_, flag="--filter")
             scope = scope_for_command(ctx, organization, WORKFLOW_JOB_TEMPLATE_SPEC)
             use = ListWorkflowNodes(
@@ -144,6 +148,6 @@ def register_nodes_command(parent: App) -> None:
             nodes = [n for n in nodes if n.type == type_]
         rows = [n.model_dump() for n in nodes]
         cols = list(columns) if columns else list(_DEFAULT_COLUMNS)
-        echo(render_rows(rows, fmt=fmt, columns=cols))
+        echo(render_rows(rows, fmt=fmt, columns=cols, kind="awx.workflow-node"))
         if any_failed:
             raise SystemExit(1)

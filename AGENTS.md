@@ -22,7 +22,7 @@ application code stay config-free and depend on narrow models/ports instead.
 The plugin manifest also contributes the packaged `untaped-awx` agent skill
 via core `SkillSpec`; keep that static skill asset current with major command
 workflow changes. The plugin object must expose `id = "awx"`, literal
-`untaped_api_version = 3`, and `manifest()` returning a core
+`untaped_api_version = 5`, and `manifest()` returning a core
 `PluginManifest`. The manifest's `CliSpec` defers the CLI via
 `import_path="untaped_awx.cli:app"`, and the package `__init__` re-exports
 `app` through a lazy PEP 562 `__getattr__` — neither `plugin.py` nor
@@ -193,6 +193,26 @@ Hand-built row dicts must keep their pipeline identifier as the first
 key, pydantic row models must keep their first declared field stable,
 and `AwxResourceSpec.list_columns` must continue to lead with `id`.
 The regression pins live in `tests/unit/test_format_raw_first_key.py`.
+
+### `--format pipe` and `kind`
+
+Every row producer passes a `kind=` to `render_rows`, so `--format pipe`
+emits self-describing NDJSON (`{"untaped":"1","kind":...,"record":{...}}`)
+that another untaped command can consume. The kind reflects *what the
+record is*: spec-driven `list`/`get` derive `awx.<kebab-kind>` via
+`cli/_pipe.pipe_kind_for_spec` (e.g. `awx.job-template`); `launch`/`update`
+emit `awx.job` (they render the resulting Job); `jobs list/get/wait` →
+`awx.job`, `jobs events` → `awx.event`, `jobs logs` → `awx.log`, `ping` →
+`awx.status`; outcome/document rows are `awx.delete-outcome`,
+`awx.apply-outcome`, `awx.document`; `unified-templates` →
+`awx.unified-template`, `nodes` → `awx.workflow-node`, `usage` →
+`awx.template-usage`, `test` → `awx.test-result`/`awx.test-case`.
+
+Every `--stdin` consumer passes `id_field=` so a `--format pipe` stream
+feeds straight back in: numeric-id commands use `id_field="id"`; spec
+factories use `"id" if --by-id else spec.identity_keys[0]` (membership
+resolves against the *member* spec). Bare newline-separated identifiers
+still work unchanged.
 
 ### `ApplyStrategy`
 

@@ -24,6 +24,7 @@ from untaped.api import (
 from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
+from untaped_awx.cli._pipe import pipe_kind_for_spec
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -63,7 +64,9 @@ def _add_get(app: App, spec: AwxResourceSpec) -> None:
         records: list[Any] = []
         any_failed = False
         with report_errors(), open_context() as ctx:
-            ids = read_identifiers(list(names or []), stdin=stdin)
+            ids = read_identifiers(
+                list(names or []), stdin=stdin, id_field="id" if by_id else spec.identity_keys[0]
+            )
             scope = scope_for_command(
                 ctx,
                 organization,
@@ -81,7 +84,7 @@ def _add_get(app: App, spec: AwxResourceSpec) -> None:
                 # ``cols`` may be ``None`` for non-table formats — that's
                 # fine; ``flatten_fks`` then only flattens declared fk_refs.
                 records = flatten_fks(records, spec, columns=cols)
-            echo(render_rows(records, fmt=fmt, columns=cols))
+            echo(render_rows(records, fmt=fmt, columns=cols, kind=pipe_kind_for_spec(spec)))
         if any_failed:
             raise SystemExit(1)
 
