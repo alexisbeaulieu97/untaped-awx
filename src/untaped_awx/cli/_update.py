@@ -40,4 +40,4 @@ def _add_update(app: App, spec: AwxResourceSpec) -> None:
             job = RunAction(ctx.repo)(spec, name=name, action="update", scope=scope, by_id=by_id)
             if wait:
                 job = WatchJob(ctx.repo)(job)
-        echo(render_rows([job.model_dump()], fmt=fmt, columns=columns))
+        echo(render_rows([job.model_dump()], fmt=fmt, columns=columns, kind="awx.job"))

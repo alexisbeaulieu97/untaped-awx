@@ -84,20 +84,20 @@ the sub-apps above.
 ```bash
 untaped awx <kind> list [--search <q>] [--filter KEY=VALUE]... [--limit N]
                         [--stdin] [--by-id] [--with-names]
-                        [--format json|yaml|table|raw] [--columns ...]
+                        [--format json|yaml|table|raw|pipe] [--columns ...]
 
 untaped awx <kind> get <name>... [--stdin] [--organization <org>|--org <org>]
                                  [--by-id] [--with-names]
-                                 [--format yaml|json|table|raw] [--columns ...]
+                                 [--format yaml|json|table|raw|pipe] [--columns ...]
 
 untaped awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
 
 untaped awx <kind> apply FILE [--yes] [--fail-fast]
-                         [--format json|yaml|table|raw] [--columns ...]
+                         [--format json|yaml|table|raw|pipe] [--columns ...]
 
 untaped awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
                                       [--organization <org>|--org <org>] [--by-id]
-                                      [--format json|yaml|table|raw] [--columns ...]
+                                      [--format json|yaml|table|raw|pipe] [--columns ...]
 # Exactly one of {positional names, --stdin} must be supplied.
 ```
 
@@ -196,7 +196,7 @@ FK references are by **name** (scoped to `metadata.organization` where
 relevant), not by id, so a saved file is portable between AAP
 instances that share resource names.
 
-`save` accepts `--format yaml|json|raw` (default `yaml`). The yaml
+`save` accepts `--format yaml|json|raw|pipe` (default `yaml`). The yaml
 path emits a bare envelope so the output pipes straight into `apply`;
 `--format json` returns the envelope inside a one-element list (same
 shape as every other `--format json` command in the suite), and

@@ -21,6 +21,7 @@ from untaped.api import (
 from untaped_awx.application import DeleteResource, GetResource
 from untaped_awx.application.get_resource import parse_resource_id
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._pipe import id_field_for
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -73,7 +74,9 @@ def _add_delete(app: App, spec: AwxResourceSpec) -> None:
             raise_usage("--stdin requires --yes (skip confirmation) or --dry-run (preview only)")
         rows: list[dict[str, Any]] = []
         with report_errors(), open_context() as ctx:
-            ids = read_identifiers(list(names or []), stdin=stdin)
+            ids = read_identifiers(
+                list(names or []), stdin=stdin, id_field=id_field_for(spec, by_id=by_id)
+            )
             scope = scope_for_command(
                 ctx,
                 organization,
@@ -115,7 +118,7 @@ def _add_delete(app: App, spec: AwxResourceSpec) -> None:
                         echo(f"error: {identifier}: {exc}", err=True)
                         any_failed = True
         if rows:
-            echo(render_rows(rows, fmt=fmt, columns=columns))
+            echo(render_rows(rows, fmt=fmt, columns=columns, kind="awx.delete-outcome"))
         if any_failed:
             raise SystemExit(1)
 

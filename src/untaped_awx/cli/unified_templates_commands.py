@@ -96,6 +96,7 @@ def list_command(
         records,
         fmt=fmt,
         columns=cols,
+        kind="awx.unified-template",
         empty="No templates found. Try a different --type or --filter.",
     )
     if rendered:
@@ -125,7 +126,7 @@ def get_command(
     records: list[dict[str, object]] = []
     missing: list[str] = []
     with report_errors(), open_context() as ctx:
-        identifiers = read_identifiers(list(ids or []), stdin=stdin)
+        identifiers = read_identifiers(list(ids or []), stdin=stdin, id_field="id")
         for raw in identifiers:
             if not raw.isdecimal():
                 # Fast-fail before hitting AWX so the error message is
@@ -143,6 +144,6 @@ def get_command(
         echo(f"error: {raw}: not found", err=True)
     if records:
         cols = list(columns) if columns else default_get_columns(fmt, _DEFAULT_LIST_COLUMNS)
-        echo(render_rows(records, fmt=fmt, columns=cols))
+        echo(render_rows(records, fmt=fmt, columns=cols, kind="awx.unified-template"))
     if missing:
         raise SystemExit(1)

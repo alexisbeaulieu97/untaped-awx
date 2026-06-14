@@ -18,6 +18,7 @@ from untaped.api import (
 from untaped_awx.application import GetResource, ListResources
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
+from untaped_awx.cli._pipe import id_field_for, pipe_kind_for_spec
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryOrganizationOption,
@@ -93,7 +94,7 @@ def _add_list(app: App, spec: AwxResourceSpec) -> None:
         any_failed = False
         with report_errors(), open_context() as ctx:
             if stdin:
-                ids = read_identifiers([], stdin=True)
+                ids = read_identifiers([], stdin=True, id_field=id_field_for(spec, by_id=by_id))
                 scope = scope_for_command(
                     ctx,
                     organization,
@@ -128,6 +129,7 @@ def _add_list(app: App, spec: AwxResourceSpec) -> None:
                 records,
                 fmt=fmt,
                 columns=cols,
+                kind=pipe_kind_for_spec(spec),
                 empty=f"No matching {spec.kind} found. Try a different --search or --filter.",
             )
             if rendered:

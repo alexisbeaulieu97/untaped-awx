@@ -73,7 +73,7 @@ def ping_command(
         config = get_config_section("awx", AwxConfig)
         with AwxClient(config, http=settings.http) as client:
             status = Ping(client)()
-        echo(render_rows([status.model_dump()], fmt=fmt, columns=columns))
+        echo(render_rows([status.model_dump()], fmt=fmt, columns=columns, kind="awx.status"))
 
 
 # ---- top-level apply (multi-kind, file or directory) ----
@@ -288,6 +288,7 @@ def jobs_list(
         records,
         fmt=fmt,
         columns=cols,
+        kind="awx.job",
         empty="No jobs found. Try a different --status or --filter.",
     )
     if rendered:
@@ -312,12 +313,14 @@ def jobs_get(
     records: list[dict[str, object]] = []
     any_failed = False
     with report_errors(), open_context() as ctx:
-        ids = read_identifiers(list(job_ids or []), stdin=stdin)
+        ids = read_identifiers(list(job_ids or []), stdin=stdin, id_field="id")
         records, any_failed = resolve_each(
             ids, lambda n: GetJob(ctx.jobs)(kind=kind, job_id=_as_job_id(n))
         )
     if records:
-        echo(render_rows(records, fmt=fmt, columns=list(columns) if columns else []))
+        echo(
+            render_rows(records, fmt=fmt, columns=list(columns) if columns else [], kind="awx.job")
+        )
     if any_failed:
         raise SystemExit(1)
 
@@ -372,7 +375,7 @@ def jobs_events(
     # Hoisted so post-``with`` exit dispatch is safe regardless of body outcome.
     any_failed = False
     with report_errors(), open_context() as ctx:
-        ids = read_identifiers(list(job_ids or []), stdin=stdin)
+        ids = read_identifiers(list(job_ids or []), stdin=stdin, id_field="id")
         show_breadcrumb = len(ids) > 1
 
         def _events_for_id(n: str) -> None:
@@ -406,7 +409,7 @@ def _emit_events(
         # table / json document so columns line up and yaml stays a
         # well-formed list.
         rows = [ev.model_dump() for ev in events]
-        echo(render_rows(rows, fmt=fmt, columns=cols))
+        echo(render_rows(rows, fmt=fmt, columns=cols, kind="awx.event"))
         return
     if fmt == "table":
         # Table mode under --follow renders each event as a colored
@@ -430,7 +433,7 @@ def _emit_events(
             echo(json.dumps(row, default=str))
         return
     for ev in events:
-        line = render_rows([ev.model_dump()], fmt=fmt, columns=cols)
+        line = render_rows([ev.model_dump()], fmt=fmt, columns=cols, kind="awx.event")
         echo(line)
 
 
@@ -448,7 +451,9 @@ def _emit_log_lines(
     events has ``["counter","event","host_name","task"]``.
     """
     if not follow:
-        rendered = render_rows([{"line": line} for line in lines], fmt=fmt, columns=cols)
+        rendered = render_rows(
+            [{"line": line} for line in lines], fmt=fmt, columns=cols, kind="awx.log"
+        )
         if rendered:
             echo(rendered)
         return
@@ -477,7 +482,7 @@ def _emit_log_lines(
     # to per-line row rendering like yaml does. Table-per-line is
     # silly but the cost is on the user who asked for it.
     for line in lines:
-        echo(render_rows([{"line": line}], fmt=fmt, columns=cols))
+        echo(render_rows([{"line": line}], fmt=fmt, columns=cols, kind="awx.log"))
 
 
 @jobs_app.command(name="logs")
@@ -507,7 +512,7 @@ def jobs_logs(
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
     fmt: Annotated[
         OutputFormat,
-        Parameter(name="--format", help="Output format (json|yaml|table|raw)."),
+        Parameter(name="--format", help="Output format (json|yaml|table|raw|pipe)."),
     ] = "raw",
     columns: ColumnsOption = None,
 ) -> None:
@@ -527,7 +532,7 @@ def jobs_logs(
     # Hoisted so post-``with`` exit dispatch is safe regardless of body outcome.
     any_failed = False
     with report_errors(), open_context() as ctx:
-        ids = read_identifiers(list(job_ids or []), stdin=stdin)
+        ids = read_identifiers(list(job_ids or []), stdin=stdin, id_field="id")
         show_breadcrumb = len(ids) > 1
         cols = list(columns) if columns else None
 
@@ -562,7 +567,7 @@ def jobs_wait(
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
     fmt: Annotated[
         OutputFormat,
-        Parameter(name=["--format", "-f"], help="Output format (json|yaml|table|raw)."),
+        Parameter(name=["--format", "-f"], help="Output format (json|yaml|table|raw|pipe)."),
     ] = "table",
     columns: ColumnsOption = None,
 ) -> None:
@@ -577,7 +582,7 @@ def jobs_wait(
     any_failed = False
     timed_out: list[int] = []
     with report_errors(), open_context() as ctx:
-        ids = read_identifiers(list(job_ids or []), stdin=stdin)
+        ids = read_identifiers(list(job_ids or []), stdin=stdin, id_field="id")
 
         def _wait_one(n: str) -> dict[str, object]:
             job_id = _as_job_id(n)
@@ -590,7 +595,7 @@ def jobs_wait(
 
         records, any_failed = resolve_each(ids, _wait_one)
     if records:
-        echo(render_rows(records, fmt=fmt, columns=columns))
+        echo(render_rows(records, fmt=fmt, columns=columns, kind="awx.job"))
     for job_id in timed_out:
         echo(f"timeout: job {job_id} did not reach terminal state", err=True)
     if any_failed or timed_out:
