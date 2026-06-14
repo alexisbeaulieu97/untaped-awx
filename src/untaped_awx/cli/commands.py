@@ -512,7 +512,7 @@ def jobs_logs(
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
     fmt: Annotated[
         OutputFormat,
-        Parameter(name="--format", help="Output format (json|yaml|table|raw)."),
+        Parameter(name="--format", help="Output format (json|yaml|table|raw|pipe)."),
     ] = "raw",
     columns: ColumnsOption = None,
 ) -> None:
@@ -567,7 +567,7 @@ def jobs_wait(
     kind: Annotated[str, Parameter(name="--kind", help=_JOB_KIND_HELP)] = "job",
     fmt: Annotated[
         OutputFormat,
-        Parameter(name=["--format", "-f"], help="Output format (json|yaml|table|raw)."),
+        Parameter(name=["--format", "-f"], help="Output format (json|yaml|table|raw|pipe)."),
     ] = "table",
     columns: ColumnsOption = None,
 ) -> None:

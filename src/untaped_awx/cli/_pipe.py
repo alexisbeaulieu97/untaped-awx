@@ -12,12 +12,16 @@ import re
 
 from untaped_awx.domain import ResourceSpec
 
-_PASCAL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+# PascalCase -> kebab, acronym-aware: ``JobTemplate`` -> ``job-template``,
+# ``HTTPRequest`` -> ``http-request`` (a naive split-before-every-capital
+# would mangle the latter into ``h-t-t-p-request``).
+_CAMEL_TAIL = re.compile(r"(.)([A-Z][a-z]+)")
+_CAMEL_RUN = re.compile(r"([a-z0-9])([A-Z])")
 
 
 def pipe_kind_for_spec(spec: ResourceSpec) -> str:
     """Return the ``awx.<kebab-kind>`` pipe hint for ``spec``."""
-    kebab = _PASCAL_BOUNDARY.sub("-", spec.kind).lower()
+    kebab = _CAMEL_RUN.sub(r"\1-\2", _CAMEL_TAIL.sub(r"\1-\2", spec.kind)).lower()
     return f"awx.{kebab}"
 
 

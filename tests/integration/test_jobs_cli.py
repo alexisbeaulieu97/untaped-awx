@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -676,6 +677,21 @@ def test_jobs_get_reads_ids_from_stdin(fake_aap: Any) -> None:
     assert result.exit_code == 0, result.output
     ids = sorted(result.stdout.strip().splitlines())
     assert ids == ["42", "43"]
+
+
+def test_jobs_get_reads_ids_from_pipe_envelope_stdin(fake_aap: Any) -> None:
+    """`jobs list --format pipe | jobs get --stdin` extracts the numeric `id`
+    from each envelope (id_field="id"), coercing the int record value to a
+    string for the lookup."""
+    _seed_running_job(fake_aap, job_id=42)
+    envelope = json.dumps({"untaped": "1", "kind": "awx.job", "record": {"id": 42, "name": "run"}})
+    result = CliInvoker().invoke(
+        app,
+        ["jobs", "get", "--stdin", "--format", "raw", "--columns", "id"],
+        input=envelope + "\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "42"
 
 
 def test_jobs_get_continues_when_one_id_missing(fake_aap: Any) -> None:
