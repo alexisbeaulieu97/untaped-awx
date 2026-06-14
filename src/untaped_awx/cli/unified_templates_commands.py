@@ -89,10 +89,17 @@ def list_command(
                 "pass --type or --filter type=…, not both — they collide on the same param",
             )
         filters["type"] = type_
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context() as ctx, ctx.progress_ui().progress("Loading templates…"):
         records = list(BrowseUnifiedTemplates(ctx.ujts)(params=filters, limit=limit))
     cols = list(columns) if columns else list(_DEFAULT_LIST_COLUMNS)
-    echo(render_rows(records, fmt=fmt, columns=cols))
+    rendered = render_rows(
+        records,
+        fmt=fmt,
+        columns=cols,
+        empty="No templates found. Try a different --type or --filter.",
+    )
+    if rendered:
+        echo(rendered)
 
 
 @app.command(name="get")

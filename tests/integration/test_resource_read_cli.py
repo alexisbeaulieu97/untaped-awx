@@ -991,3 +991,34 @@ def test_scope_aliases_are_advertised_on_generated_commands() -> None:
         assert result.exit_code == 0, result.output
         assert _flag_in_help("--organization", result.output), args
         assert _flag_in_help("--org", result.output), args
+
+
+def test_list_empty_guides_with_stderr_hint(fake_aap: Any) -> None:
+    # Nothing seeded for this kind → empty list → guiding hint on stderr,
+    # stdout stays clean.
+    result = CliInvoker().invoke(app, ["job-templates", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout == ""
+    assert "No matching" in result.stderr
+    assert "found" in result.stderr
+
+
+def test_list_empty_json_stays_pipe_clean(fake_aap: Any) -> None:
+    result = CliInvoker().invoke(app, ["job-templates", "list", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "[]"
+    assert "No matching" not in result.stderr
+
+
+def test_list_reports_progress_on_stderr(fake_aap: Any) -> None:
+    _seed_basic(fake_aap)
+    result = CliInvoker().invoke(
+        app, ["job-templates", "list", "--format", "raw", "--columns", "name"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == "deploy"
+    assert "Loading" in result.stderr
+    assert "Loading" not in result.stdout

@@ -158,7 +158,9 @@ def run_command(
     show_logs: Annotated[
         bool,
         Parameter(
-            name=["--show-logs", "-v"],
+            # ``-v`` dropped in the plugin-API-v5 rollout: core now owns a
+            # global ``--verbose``/``-v``, so the short alias would shadow it.
+            name="--show-logs",
             negative="",
             help="On failure, dump the tail of AWX stdout to stderr.",
         ),

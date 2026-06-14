@@ -904,3 +904,11 @@ def test_jobs_events_multi_id_non_follow_emits_per_job_blocks(fake_aap: Any) -> 
     assert len(chunks) == 2, result.stdout
     parsed = [_json.loads(c) for c in chunks]
     assert [row[0]["counter"] for row in parsed] == [1, 2]
+
+
+def test_jobs_list_empty_guides_with_stderr_hint(fake_aap: Any) -> None:
+    result = CliInvoker().invoke(app, ["jobs", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout == ""
+    assert "No jobs found" in result.stderr
