@@ -107,9 +107,10 @@ def _add_list(app: App, spec: AwxResourceSpec) -> None:
                 )
             else:
                 filters = parse_kv_pairs(filter_, flag="--filter")
-                records = list(
-                    ListResources(ctx.repo)(spec, search=search, filters=filters, limit=limit)
-                )
+                with ctx.progress_ui().progress(f"Loading {spec.kind}…"):
+                    records = list(
+                        ListResources(ctx.repo)(spec, search=search, filters=filters, limit=limit)
+                    )
         cols = list(columns) if columns else list(spec.list_columns)
         if with_names:
             # Pass ``cols`` so display-only FK columns (e.g. Host's
@@ -123,6 +124,13 @@ def _add_list(app: App, spec: AwxResourceSpec) -> None:
         # json/yaml, header-only table, blank for raw) so downstream
         # tools like ``jq`` always see a valid document.
         if records or not stdin:
-            echo(render_rows(records, fmt=fmt, columns=cols))
+            rendered = render_rows(
+                records,
+                fmt=fmt,
+                columns=cols,
+                empty=f"No matching {spec.kind} found. Try a different --search or --filter.",
+            )
+            if rendered:
+                echo(rendered)
         if any_failed:
             raise SystemExit(1)

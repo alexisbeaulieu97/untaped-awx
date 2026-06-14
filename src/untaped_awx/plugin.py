@@ -17,7 +17,7 @@ from untaped_awx.infrastructure import AwxConfig
 
 class AwxPlugin:
     id = "awx"
-    untaped_api_version = 3
+    untaped_api_version = 5
 
     def manifest(self) -> PluginManifest:
         return PluginManifest(

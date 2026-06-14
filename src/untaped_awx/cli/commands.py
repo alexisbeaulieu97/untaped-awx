@@ -281,10 +281,17 @@ def jobs_list(
     filters = parse_kv_pairs(filter_, flag="--filter")
     if status:
         filters["status"] = status
-    with report_errors(), open_context() as ctx:
+    with report_errors(), open_context() as ctx, ctx.progress_ui().progress("Loading jobs…"):
         records = list(ListJobs(ctx.jobs)(kind=kind, params=filters, limit=limit))
     cols = list(columns) if columns else ["id", "name", "status"]
-    echo(render_rows(records, fmt=fmt, columns=cols))
+    rendered = render_rows(
+        records,
+        fmt=fmt,
+        columns=cols,
+        empty="No jobs found. Try a different --status or --filter.",
+    )
+    if rendered:
+        echo(rendered)
 
 
 @jobs_app.command(name="get")

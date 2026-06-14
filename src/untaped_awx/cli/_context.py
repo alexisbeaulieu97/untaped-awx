@@ -29,12 +29,15 @@ from untaped_awx.infrastructure.workflow_node_repo import WorkflowNodeRepository
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from untaped.api import UiContext
+
 
 class AwxContext:
     """Holds wired-up dependencies for a single CLI invocation."""
 
     def __init__(self, context: PluginContext | None = None) -> None:
         context = context or plugin_context()
+        self._context = context
         config = context.section("awx", AwxConfig)
         self.client = AwxClient(config, http=context.http)
         self.repo = ResourceRepository(self.client, page_size=config.page_size)
@@ -50,6 +53,15 @@ class AwxContext:
         self.ujts = UnifiedTemplateRepository(self.repo)
         self.workflow_nodes = WorkflowNodeRepository(self.repo)
         self.default_organization = config.default_organization
+
+    def progress_ui(self) -> UiContext:
+        """Themed UI for stderr progress on slow AWX calls.
+
+        Built ``strict=False`` so a misconfigured ``ui.theme`` degrades the
+        spinner to the default theme rather than failing an otherwise-valid
+        command on the data path (e.g. ``--format raw``).
+        """
+        return self._context.ui(strict=False)
 
     def close(self) -> None:
         self.client.close()

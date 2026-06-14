@@ -232,3 +232,11 @@ def test_get_stdin_round_trips_from_list_output(fake_aap: Any) -> None:
     assert get_result.exit_code == 0, get_result.output
     names = sorted(get_result.stdout.strip().splitlines())
     assert names == ["cmdb-import", "deploy-app", "playbooks-repo", "weekly-rollup"]
+
+
+def test_list_empty_guides_with_stderr_hint(fake_aap: Any) -> None:
+    result = CliInvoker().invoke(app, ["unified-templates", "list"])
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout == ""
+    assert "No templates found" in result.stderr

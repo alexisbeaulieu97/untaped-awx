@@ -47,7 +47,7 @@ def test_awx_plugin_entry_point_is_declared() -> None:
 
 
 def test_awx_plugin_declares_untaped_api_version() -> None:
-    assert awx_plugin.untaped_api_version == 3
+    assert awx_plugin.untaped_api_version == 5
 
 
 def test_untaped_source_tracks_core_default_branch() -> None:
