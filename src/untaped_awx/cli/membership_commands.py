@@ -31,6 +31,7 @@ from untaped.api import (
 
 from untaped_awx.application import GetResource, ManageMembership
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._pipe import id_field_for
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryOption,
@@ -93,7 +94,7 @@ def _add_membership_verb(
             member_ids_input = read_identifiers(
                 list(members or []),
                 stdin=stdin,
-                id_field="id" if by_id else member_spec.identity_keys[0],
+                id_field=id_field_for(member_spec, by_id=by_id),
             )
             parent_scope = scope_for_command(
                 ctx,

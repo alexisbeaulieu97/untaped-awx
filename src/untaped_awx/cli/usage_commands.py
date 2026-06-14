@@ -28,6 +28,7 @@ from untaped import (
 
 from untaped_awx.application import ListTemplateUsage
 from untaped_awx.cli._context import open_context, scope_for_command
+from untaped_awx.cli._pipe import id_field_for
 from untaped_awx.cli.options import ByIdOption, OrganizationOption, resolve_max_depth
 from untaped_awx.domain import WorkflowUsage
 from untaped_awx.infrastructure.spec import AwxResourceSpec
@@ -111,7 +112,7 @@ def register_usage_command(parent: App, spec: AwxResourceSpec) -> None:
             targets = read_identifiers(
                 list(identifiers or []),
                 stdin=stdin,
-                id_field="id" if by_id else spec.identity_keys[0],
+                id_field=id_field_for(spec, by_id=by_id),
             )
             filters = parse_kv_pairs(filter_, flag="--filter")
             scope = scope_for_command(ctx, organization, spec)

@@ -24,7 +24,7 @@ from untaped.api import (
 from untaped_awx.application import GetResource
 from untaped_awx.cli._context import open_context, scope_for_command
 from untaped_awx.cli._names import flatten_fks
-from untaped_awx.cli._pipe import pipe_kind_for_spec
+from untaped_awx.cli._pipe import id_field_for, pipe_kind_for_spec
 from untaped_awx.cli.options import (
     ByIdOption,
     InventoryLookupOption,
@@ -65,7 +65,7 @@ def _add_get(app: App, spec: AwxResourceSpec) -> None:
         any_failed = False
         with report_errors(), open_context() as ctx:
             ids = read_identifiers(
-                list(names or []), stdin=stdin, id_field="id" if by_id else spec.identity_keys[0]
+                list(names or []), stdin=stdin, id_field=id_field_for(spec, by_id=by_id)
             )
             scope = scope_for_command(
                 ctx,
