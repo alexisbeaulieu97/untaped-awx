@@ -9,9 +9,8 @@ __all__ = ["app"]
 
 
 def __getattr__(name: str) -> App:
-    # PEP 562 lazy re-export: the plugin manifest defers the CLI via
-    # `CliSpec.import_path`, so the package __init__ must not import the
-    # command tree eagerly either — `untaped_awx.app` resolves on access.
+    # PEP 562 lazy re-export: importing `untaped_awx` must not pull in the
+    # 10+ KLOC command tree, so `untaped_awx.app` resolves only on access.
     # The function-local import is the mechanism, hence the suppression.
     if name == "app":
         from untaped_awx.cli import app  # noqa: PLC0415
