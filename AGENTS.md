@@ -1,40 +1,53 @@
 # AGENTS.md — `untaped-awx`
 
-Internals of the AWX/AAP bounded context for AI agents and contributors.
-For user-facing setup and command reference, see
-[`docs/awx.md`](docs/awx.md). For shared core APIs and plugin plumbing, see
-the [`untaped` core repo](https://github.com/alexisbeaulieu97/untaped).
+Single source of truth for this standalone CLI repo. Internals of the
+AWX/AAP bounded context for AI agents and contributors. For user-facing
+setup and command reference, see [`docs/awx.md`](docs/awx.md). For the
+shared SDK surface, see the
+[`untaped` SDK repo](https://github.com/alexisbeaulieu97/untaped).
+
+## Mission
+
+`untaped-awx` is a standalone CLI built on the `untaped` SDK, invoked as
+`untaped-awx`. It talks to Ansible Automation Platform (AAP) and upstream
+AWX through their REST API. The `untaped` SDK owns config loading, output
+helpers, HTTP/TLS primitives, profile selection, the shared `config` /
+`profile` / `skills` command groups, and shared errors. Profile selection
+is built into the SDK and works in any token position.
 
 ## Maintenance Rules
 
-- Keep this `AGENTS.md` and the packaged `src/untaped_awx/skills/untaped-awx/SKILL.md` current with command, settings, workflow, and plugin-contract changes.
+- Keep this `AGENTS.md` and the packaged `src/untaped_awx/skills/untaped-awx/SKILL.md` current with command, settings, and workflow changes.
 
 ## `AwxConfig` — package-local config
 
 `AwxConfig` (`infrastructure/config.py`) is the package-local config struct
 (`base_url`, `token`, `api_prefix`, `default_organization`, `page_size`).
-The plugin manifest declares this model as the `awx` profile settings
-section, and the CLI composition root (`cli/_context.py`) reads it with
-`plugin_context().section("awx", AwxConfig)`.
-Plugin registration and CLI composition roots may import `AwxConfig`;
-infrastructure clients receive it as package-local configuration. Domain and
-application code stay config-free and depend on narrow models/ports instead.
-The plugin manifest also contributes the packaged `untaped-awx` agent skill
-via core `SkillSpec`; keep that static skill asset current with major command
-workflow changes. The plugin object must expose `id = "awx"`, literal
-`untaped_api_version = 5`, and `manifest()` returning a core
-`PluginManifest`. The manifest's `CliSpec` defers the CLI via
-`import_path="untaped_awx.cli:app"`, and the package `__init__` re-exports
-`app` through a lazy PEP 562 `__getattr__` — neither `plugin.py` nor
-`untaped_awx/__init__.py` may import the CLI tree eagerly (pinned by
-`test_plugin_import_keeps_cli_module_off_the_startup_path`). Plugins import
-the SDK surface from `untaped.api`, never from core internals.
+The tool's `ToolSpec` (`untaped_awx/__main__.py`) declares this model as the
+`awx` profile settings section, and the CLI composition root
+(`cli/_context.py`) reads it with `plugin_context().section("awx", AwxConfig)`.
+The composition root may import `AwxConfig`; infrastructure clients receive
+it as package-local configuration. Domain and application code stay
+config-free and depend on narrow models/ports instead.
 
-Profile selection happens at the root: core plugin API v4's root
-`--profile` option works in any token position (the core strips the
-token and re-dispatches), so AWX commands expose no command-local
-`--profile`. Commands that read settings call `open_context()`, which
-resolves a frozen core `PluginContext` via the bare `plugin_context()`.
+The CLI is exposed through the SDK entry point: `untaped_awx/__main__.py`
+hands the Cyclopts `app` and the `ToolSpec` to `run_tool`, which mounts the
+shared `config` / `profile` / `skills` groups, wires the `--profile` /
+`--verbose` root options, overrides the program name to `untaped-awx`, and
+runs under the SDK's error contract. The `ToolSpec` also contributes the
+packaged `untaped-awx` agent skill via `SkillAsset`; keep that static skill
+asset current with major command workflow changes. Keep the root API
+import-light: `untaped_awx/__init__.py` re-exports `app` only through a PEP
+562 module `__getattr__` so importing the package never eagerly imports the
+command tree. Import the SDK surface from `untaped.api`, never from SDK
+internals (only tests may reach for `untaped.testing` and SDK names not
+exported by `untaped.api`).
+
+Profile selection happens at the root: the SDK's `--profile` option works in
+any token position (the SDK strips the token and re-dispatches), so AWX
+commands expose no command-local `--profile`. Commands that read settings
+call `open_context()`, which resolves a frozen `PluginContext` via the bare
+`plugin_context()`.
 
 Adding a new field is a three-place edit: `AwxConfig`, the call site that
 needs the value, and tests for loading/env override where relevant.
@@ -178,7 +191,7 @@ dropped (paranoid net).
 Collected row-style AWX outputs go through core `untaped.render_rows`
 (`render_rows(rows, fmt=fmt, columns=columns)`). For `--format table`,
 it uses core `ui_context()` so global `ui:` settings and registered
-theme plugins affect human terminal rendering (for example
+themes affect human terminal rendering (for example
 `ui.collection_view: list`). For `json`, `yaml`, and `raw`, it
 deliberately uses plain `UiContext()` so missing or invalid global
 themes never break structured output or pipe-oriented commands.
@@ -359,7 +372,7 @@ race, not the slot race.
 below), then hands the resolved `(identifier, record)` set to core's
 shared `batch_apply` (`from untaped.api import batch_apply`,
 `destructive=True`). `batch_apply` owns the preview → confirm → progress →
-per-id `error: <ident>: <exc>` loop; the plugin passes it
+per-id `error: <ident>: <exc>` loop; the tool passes it
 `ctx.progress_ui()` and the per-item `_do_delete`, and keeps ownership of
 the summary render and exit code (`any_failed` from the resolve phase is
 OR-ed with `outcome.any_failed`). Without `--yes`, `batch_apply` lists the
@@ -459,8 +472,8 @@ returns `None` for unknown values so the recursion guard never
 descends into kinds we don't recognise.
 
 **`--stdin` for multi-root.** `nodes` accepts multiple workflow
-names/ids on stdin (`untaped awx workflow-templates list -f raw -c id
-| untaped awx workflow-templates nodes --stdin --recursive`),
+names/ids on stdin (`untaped-awx workflow-templates list -f raw -c id
+| untaped-awx workflow-templates nodes --stdin --recursive`),
 concatenating each root's node tree in input order. Identifier
 resolution goes through `untaped.read_identifiers` so the same
 "exactly one source" + "non-empty stdin" contract applies as on
@@ -515,7 +528,7 @@ The typed `name` field continues to flatten the referenced template's
 name as a convenience (also reachable as
 `summary_fields.unified_job_template.name`).
 
-## Test framework (`untaped awx test`) runner internals
+## Test framework (`untaped-awx test`) runner internals
 
 User-facing reference (file shape, variables, name resolution, pass-through
 warnings) is in [`docs/awx.md`](docs/awx.md). Internals:
@@ -556,5 +569,8 @@ CLI flows.
 
 - [`docs/awx.md`](docs/awx.md) — user-facing setup and command
   reference (covers `jobs`, `unified-templates`, `test`)
-- [`untaped` AGENTS.md](https://github.com/alexisbeaulieu97/untaped/blob/main/AGENTS.md) —
-  core plugin APIs, profiles, TLS, and shared helpers
+- [`untaped` SDK](https://github.com/alexisbeaulieu97/untaped) —
+  CLI launcher, settings registry, config-file helpers, profiles, TLS,
+  and shared output helpers
+- [`untaped` configuration docs](https://github.com/alexisbeaulieu97/untaped/blob/main/docs/configuration.md) —
+  user-facing profile, config, secrets, and TLS behavior

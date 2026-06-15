@@ -1,23 +1,22 @@
-"""Register the AWX plugin's settings sections for the unit-test tree.
+"""Register the AWX tool's settings sections for the unit-test tree.
 
 The root ``tests/conftest.py`` resets the core config registry around
-every test. Under plugin API v3 the ``awx`` profile section only exists
-on the resolved ``Settings`` model once the plugin manifest has been
-registered (production: discovery → ``register_plugins`` →
-``apply_config_sections``). Mirror that here so the composition root's
-``plugin_context().section("awx", AwxConfig)`` resolves in tests, the
-same way it does in a real invocation.
+every test. The ``awx`` profile section only exists on the resolved
+``Settings`` model once the tool has registered it (production:
+``run_tool`` → ``register_tool``). Mirror that here so the composition
+root's ``plugin_context().section("awx", AwxConfig)`` resolves in tests,
+the same way it does in a real invocation.
 """
 
 from __future__ import annotations
 
 import pytest
-from untaped.testing import register_plugin_for_tests
+from untaped.api import register_tool
 
-from untaped_awx.plugin import plugin as awx_plugin
+from untaped_awx.__main__ import SPEC
 
 
 @pytest.fixture(autouse=True)
 def _register_awx_settings(_reset_settings_cache: None) -> None:
     """Depends on the root reset fixture so registration happens after it."""
-    register_plugin_for_tests(awx_plugin)
+    register_tool(SPEC)
