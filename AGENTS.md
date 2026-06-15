@@ -355,12 +355,18 @@ race, not the slot race.
 
 ## Delete: preview-and-confirm with a `--yes` fast path
 
-`cli/_delete.py` follows the apply pipeline's preview-by-default ethic:
-without `--yes`, each identifier is resolved via GET (so the prompt
-lists the names being deleted), the user confirms through
-`ui_context(strict=False).confirm(...)`, then a per-id DELETE runs. The
-prompt renders on stderr and requires TTY stdin; automation must pass
-`--yes`. Under `--yes --by-id` (no prompt to surface the name), the
+`cli/_delete.py` resolves identifiers (per-id GET, or the bulk fast path
+below), then hands the resolved `(identifier, record)` set to core's
+shared `batch_apply` (`from untaped.api import batch_apply`,
+`destructive=True`). `batch_apply` owns the preview → confirm → progress →
+per-id `error: <ident>: <exc>` loop; the plugin passes it
+`ctx.progress_ui()` and the per-item `_do_delete`, and keeps ownership of
+the summary render and exit code (`any_failed` from the resolve phase is
+OR-ed with `outcome.any_failed`). Without `--yes`, `batch_apply` lists the
+names on stderr and prompts on a TTY; a non-interactive stdin refuses with
+`delete requires --yes when stdin is not interactive` (the stream is the
+data — nothing to confirm against). `--dry-run` maps to `preview_only`
+(renders `planned_rows`, never DELETEs). Under `--yes --by-id` (no prompt to surface the name), the
 resolve phase skips the per-id GET — AWX's DELETE returns the same
 `not found: <url>` shape on a missing id, so one bulk `?id__in=…`
 prefetch (`GetResource.by_ids`) keeps the post-DELETE row's `name`

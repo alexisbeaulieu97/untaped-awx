@@ -1,21 +1,18 @@
 """``delete`` builder for the spec-driven CLI factory."""
 
-import sys
 from typing import Annotated, Any
 
 from cyclopts import App, Parameter
 from untaped.api import (
     ColumnsOption,
-    ConfigError,
     FormatOption,
-    UntapedError,
+    batch_apply,
     echo,
     raise_usage,
     read_identifiers,
     render_rows,
     report_errors,
     resolve_each,
-    ui_context,
 )
 
 from untaped_awx.application import DeleteResource, GetResource
@@ -103,20 +100,29 @@ def _add_delete(app: App, spec: AwxResourceSpec) -> None:
                     prefetch=prefetch,
                 ),
             )
-            if dry_run:
-                rows = [_delete_row(record) for _, record in resolved]
-            elif resolved and _confirm_delete(resolved, spec, yes=yes):
-                # Flow through to the post-``with`` checks on decline so
-                # ``any_failed`` from a prior resolve error still drives
-                # the exit code — an early ``return`` here would mask it.
-                deleter = DeleteResource(ctx.repo)
-                for identifier, record in resolved:
-                    try:
-                        deleter(spec, int(record["id"]))
-                        rows.append(_delete_row(record, deleted=True))
-                    except UntapedError as exc:
-                        echo(f"error: {identifier}: {exc}", err=True)
-                        any_failed = True
+            deleter = DeleteResource(ctx.repo)
+            # ``batch_apply`` owns the preview/confirm/--yes gate and the
+            # per-id ``error: <ident>: <exc>`` loop. ``any_failed`` from the
+            # resolve phase above is OR-ed in below so a prior resolve error
+            # (or a declined prompt over a partial batch) still drives exit 1.
+            outcome = batch_apply(
+                resolved,
+                lambda pair: _do_delete(deleter, spec, pair),
+                verb="delete",
+                noun=spec.kind,
+                label=lambda pair: pair[0],
+                describe=lambda pair: _delete_row(pair[1]),
+                ui=ctx.progress_ui(),
+                destructive=True,
+                assume_yes=yes,
+                preview_only=dry_run,
+            )
+            rows = (
+                outcome.planned_rows
+                if dry_run
+                else [_delete_row(record, deleted=True) for _, record in outcome.results]
+            )
+            any_failed = any_failed or outcome.any_failed
         if rows:
             echo(render_rows(rows, fmt=fmt, columns=columns, kind="awx.delete-outcome"))
         if any_failed:
@@ -161,26 +167,17 @@ def _delete_row(record: dict[str, Any], *, deleted: bool | None = None) -> dict[
     return row
 
 
-def _confirm_delete(
-    resolved: list[tuple[str, dict[str, Any]]],
+def _do_delete(
+    deleter: DeleteResource,
     spec: AwxResourceSpec,
-    *,
-    yes: bool,
-) -> bool:
-    """Print resolved targets to stderr and prompt; return user's choice.
+    pair: tuple[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Delete one resolved ``(identifier, record)`` and return its record.
 
-    Matches ``untaped-workspace``'s ``_confirm(prompt, yes=…)`` shape so
-    the same gating idiom reads consistently across domains.
+    Raises :class:`UntapedError` on a failed DELETE; ``batch_apply`` catches it
+    and emits the ``error: <identifier>: <exc>`` row (``identifier`` is the
+    ``label`` it was given).
     """
-    if yes:
-        return True
-    if not _stdin_is_interactive():
-        raise ConfigError("awx delete requires --yes when stdin is not interactive")
-    echo(f"About to delete {len(resolved)} {spec.kind}(s):", err=True)
-    for _, record in resolved:
-        echo(f"  - {record.get('id')}\t{record.get('name', '')}", err=True)
-    return ui_context(strict=False).confirm("Continue?")
-
-
-def _stdin_is_interactive() -> bool:
-    return sys.stdin.isatty()
+    _identifier, record = pair
+    deleter(spec, int(record["id"]))
+    return record

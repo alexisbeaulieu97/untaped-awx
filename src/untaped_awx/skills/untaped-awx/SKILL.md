@@ -22,6 +22,7 @@ Use this skill when the user wants an agent to operate `untaped awx` for Ansible
 - Use `--format pipe` to chain commands richly: it emits one self-describing record per line tagged with a `kind` (e.g. `awx.job-template`, `awx.job`), and any `--stdin` consumer reads that stream back (e.g. `job-templates list --format pipe | job-templates get --stdin`).
 - Use `get --format yaml` or `save` when the next step is editing an AWX object declaratively.
 - Apply workflows preview by default; writes require `--yes`.
+- `delete` is a guarded batch verb: it previews the targets on stderr and confirms before deleting. On a TTY it prompts; reading targets from a pipe (e.g. `inventories list --filter name__contains=test --format pipe | inventories delete --stdin --yes`) requires `--yes` because stdin is the data, not a prompt. Use `--dry-run` to preview the set (rows go to stdout) without deleting. Deleted ids lead each row, so `--format raw` pipes them onward.
 
 ## Agent Guidance
 

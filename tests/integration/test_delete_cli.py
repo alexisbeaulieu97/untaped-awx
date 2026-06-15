@@ -8,6 +8,7 @@ shape on partial failures.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
@@ -17,6 +18,47 @@ from untaped.testing import CliInvoker
 from untaped_awx import app
 
 pytestmark = pytest.mark.integration
+
+
+class _FakeHandle:
+    def update(self, *args: object, **kwargs: object) -> None:
+        pass
+
+
+@contextmanager
+def _noop_progress(label: str) -> Any:
+    yield _FakeHandle()
+
+
+def _prompt_ui(*, answer: bool, seen: dict[str, object] | None = None) -> Any:
+    """A stub UiContext (confirm + no-op progress) injected via ``progress_ui``.
+
+    The preview/confirm gate now lives in core ``batch_apply``; the plugin passes
+    it ``ctx.progress_ui()``, so tests inject the stub there and force
+    interactivity by patching ``untaped.batch._stdin_is_interactive``.
+    """
+
+    class _PromptUi:
+        def confirm(self, message: str, *, default: bool = False) -> bool:
+            if seen is not None:
+                seen["message"] = message
+                seen["default"] = default
+            return answer
+
+        def progress(self, label: str) -> Any:
+            return _noop_progress(label)
+
+    return _PromptUi()
+
+
+def _patch_prompt(
+    monkeypatch: pytest.MonkeyPatch, *, answer: bool, seen: dict[str, object] | None = None
+) -> None:
+    monkeypatch.setattr("untaped.batch._stdin_is_interactive", lambda: True)
+    monkeypatch.setattr(
+        "untaped_awx.cli._context.AwxContext.progress_ui",
+        lambda self: _prompt_ui(answer=answer, seen=seen),
+    )
 
 
 def _seed_jt(fake: Any, *, id_: int, name: str) -> None:
@@ -29,15 +71,8 @@ def _seed_jt(fake: Any, *, id_: int, name: str) -> None:
     )
 
 
-def test_delete_by_id_removes_record(
-    seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_delete_by_id_removes_record(seeded_default_org: Any) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-
-    def fail_ui_context(*_: object, **__: object) -> object:
-        raise AssertionError("should not prompt with --yes")
-
-    monkeypatch.setattr("untaped_awx.cli._delete.ui_context", fail_ui_context, raising=False)
 
     result = CliInvoker().invoke(
         app, ["job-templates", "delete", "--by-id", "10", "--yes", "--format", "raw"]
@@ -181,23 +216,7 @@ def test_delete_prompt_accepts_yes(
 ) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     seen: dict[str, object] = {}
-
-    class _PromptUi:
-        def confirm(self, message: str, *, default: bool = False) -> bool:
-            seen["message"] = message
-            seen["default"] = default
-            return True
-
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete._stdin_is_interactive",
-        lambda: True,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete.ui_context",
-        lambda **_: _PromptUi(),
-        raising=False,
-    )
+    _patch_prompt(monkeypatch, answer=True, seen=seen)
 
     result = CliInvoker().invoke(
         app,
@@ -218,23 +237,7 @@ def test_delete_prompt_declines_aborts(
     """Saying no at the confirmation prompt must not call DELETE."""
     _seed_jt(seeded_default_org, id_=10, name="alpha")
     seen: dict[str, object] = {}
-
-    class _PromptUi:
-        def confirm(self, message: str, *, default: bool = False) -> bool:
-            seen["message"] = message
-            seen["default"] = default
-            return False
-
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete._stdin_is_interactive",
-        lambda: True,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete.ui_context",
-        lambda **_: _PromptUi(),
-        raising=False,
-    )
+    _patch_prompt(monkeypatch, answer=False, seen=seen)
 
     result = CliInvoker().invoke(
         app,
@@ -250,16 +253,12 @@ def test_delete_prompt_requires_yes_when_non_interactive(
     seeded_default_org: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete._stdin_is_interactive",
-        lambda: False,
-        raising=False,
-    )
+    monkeypatch.setattr("untaped.batch._stdin_is_interactive", lambda: False)
 
     result = CliInvoker().invoke(app, ["job-templates", "delete", "--by-id", "10"])
 
     assert result.exit_code == 1
-    assert "awx delete requires --yes when stdin is not interactive" in result.output
+    assert "delete requires --yes when stdin is not interactive" in result.output
     assert 10 in seeded_default_org.store["job_templates"]
 
 
@@ -312,21 +311,7 @@ def test_decline_after_prior_resolve_failure_exits_1(
     real input error already reported on stderr.
     """
     _seed_jt(seeded_default_org, id_=10, name="alpha")
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete._stdin_is_interactive",
-        lambda: True,
-        raising=False,
-    )
-
-    class _PromptUi:
-        def confirm(self, message: str, *, default: bool = False) -> bool:
-            return False
-
-    monkeypatch.setattr(
-        "untaped_awx.cli._delete.ui_context",
-        lambda **_: _PromptUi(),
-        raising=False,
-    )
+    _patch_prompt(monkeypatch, answer=False)
 
     result = CliInvoker().invoke(
         app,
