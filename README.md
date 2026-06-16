@@ -39,6 +39,7 @@ untaped-awx <kind> list
 untaped-awx <kind> get <name>
 untaped-awx <kind> save <name>
 untaped-awx <kind> apply FILE
+untaped-awx <kind> list -f pipe | untaped-awx <kind> apply --stdin --set field=value --yes
 untaped-awx save --all-kinds --org <org> --out-dir backup/
 untaped-awx jobs list
 untaped-awx jobs events <id>

@@ -94,6 +94,10 @@ untaped-awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
 
 untaped-awx <kind> apply FILE [--yes] [--fail-fast]
                          [--format json|yaml|table|raw|pipe] [--columns ...]
+# Mass-patch a piped selection instead of a file:
+untaped-awx <kind> apply --stdin (--set NAME=VALUE... | --patch-file FILE)
+                         [--yes] [--by-id] [--organization <org>|--org <org>]
+# Exactly one of {FILE, --stdin}.
 
 untaped-awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
                                       [--organization <org>|--org <org>] [--by-id]
@@ -207,6 +211,24 @@ exits without writing. Pass `--yes` to actually write. The diff is
 field-level; declared secret paths (`inputs.*`, `webhook_key`)
 carrying `$encrypted$` are stripped from the PATCH and shown as
 `(preserved existing secret)` rows.
+
+`apply --stdin` mass-patches a piped *selection* instead of a file:
+pipe a `list` into it, overlay the fields to change with `--set
+NAME=VALUE` (repeatable, JSON-coerced — `verbosity=2` → `2`,
+`enabled=true` → `True`) and/or a partial-spec `--patch-file`, and each
+listed item is PATCHed with only the fields that actually differ.
+`--set` wins over `--patch-file` on a key clash. This path **only
+updates** — a name/id that doesn't resolve is a per-item error, never a
+create. Same preview→`--yes` safety as file mode, and the same
+secret-clobber protection. Runs serially.
+
+```bash
+# Set verbosity on every job template in an org (preview, then write):
+untaped-awx job-templates list --org Engineering --format pipe \
+  | untaped-awx job-templates apply --stdin --set verbosity=2 --org Engineering
+untaped-awx job-templates list --org Engineering --format pipe \
+  | untaped-awx job-templates apply --stdin --set verbosity=2 --org Engineering --yes
+```
 
 ### `delete` (mutable kinds)
 

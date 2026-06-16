@@ -1,0 +1,225 @@
+"""End-to-end CLI tests for ``untaped awx <kind> apply --stdin`` mass-patch.
+
+Drives the per-kind ``apply`` command from a piped selection (names, ids, or a
+``--format pipe`` envelope stream) plus a ``--set`` / ``--patch-file`` overlay.
+Pins the contract: preview-by-default, ``--yes`` writes a sparse PATCH of only
+the overlaid fields, the selection path never creates, and an overlay field the
+kind doesn't accept is rejected loudly.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+from untaped.testing import CliInvoker
+
+from untaped_awx import app
+
+pytestmark = pytest.mark.integration
+
+
+def _seed_jt(fake: Any, *, id_: int = 30, name: str = "deploy", **extra: Any) -> None:
+    fake.seed(
+        "job_templates",
+        id=id_,
+        name=name,
+        organization=1,
+        organization_name="Default",
+        playbook="deploy.yml",
+        **extra,
+    )
+
+
+def _patches(fake: Any) -> list[Any]:
+    return [c for c in fake.router.calls if c.request.method == "PATCH"]
+
+
+def _posts(fake: Any) -> list[Any]:
+    return [c for c in fake.router.calls if c.request.method == "POST"]
+
+
+def test_apply_stdin_preview_does_not_write(seeded_default_org: Any) -> None:
+    _seed_jt(seeded_default_org)
+    result = CliInvoker().invoke(
+        app,
+        ["job-templates", "apply", "--stdin", "--set", "verbosity=2", "--organization", "Default"],
+        input="deploy\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert _patches(seeded_default_org) == []
+    assert "verbosity" in (result.stderr or "")
+
+
+def test_apply_stdin_yes_patches_only_set_field(seeded_default_org: Any) -> None:
+    _seed_jt(seeded_default_org)
+    result = CliInvoker().invoke(
+        app,
+        [
+            "job-templates",
+            "apply",
+            "--stdin",
+            "--set",
+            "verbosity=2",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input="deploy\n",
+    )
+    assert result.exit_code == 0, result.output
+    patches = _patches(seeded_default_org)
+    assert len(patches) == 1
+    assert json.loads(patches[0].request.content) == {"verbosity": 2}
+    assert seeded_default_org.get_record("job_templates", 30)["verbosity"] == 2
+
+
+def test_apply_stdin_never_creates_missing_target(seeded_default_org: Any) -> None:
+    """A piped name that doesn't resolve is a per-item error — never a create."""
+    result = CliInvoker().invoke(
+        app,
+        [
+            "job-templates",
+            "apply",
+            "--stdin",
+            "--set",
+            "verbosity=2",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input="ghost\n",
+    )
+    assert result.exit_code == 1
+    assert "ghost" in (result.stderr or result.output)
+    assert _posts(seeded_default_org) == []  # nothing created
+
+
+def test_apply_stdin_requires_set_or_patch_file(seeded_default_org: Any) -> None:
+    _seed_jt(seeded_default_org)
+    result = CliInvoker().invoke(
+        app, ["job-templates", "apply", "--stdin", "--yes"], input="deploy\n"
+    )
+    assert result.exit_code == 2
+    assert "--set" in (result.stderr or result.output)
+
+
+def test_apply_file_with_set_is_usage_error(seeded_default_org: Any, tmp_path: Path) -> None:
+    f = tmp_path / "x.yml"
+    f.write_text("kind: JobTemplate\nmetadata: {name: deploy}\nspec: {}\n")
+    result = CliInvoker().invoke(app, ["job-templates", "apply", str(f), "--set", "verbosity=2"])
+    assert result.exit_code == 2
+    assert "--stdin" in (result.stderr or result.output)
+
+
+def test_apply_neither_file_nor_stdin_is_usage_error(seeded_default_org: Any) -> None:
+    result = CliInvoker().invoke(app, ["job-templates", "apply"])
+    assert result.exit_code == 2
+    assert "--stdin" in (result.stderr or result.output)
+
+
+def test_apply_stdin_patch_file_merges_with_set(seeded_default_org: Any, tmp_path: Path) -> None:
+    _seed_jt(seeded_default_org)
+    pf = tmp_path / "p.yml"
+    pf.write_text("verbosity: 1\njob_tags: base\n")
+    result = CliInvoker().invoke(
+        app,
+        [
+            "job-templates",
+            "apply",
+            "--stdin",
+            "--patch-file",
+            str(pf),
+            "--set",
+            "verbosity=5",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input="deploy\n",
+    )
+    assert result.exit_code == 0, result.output
+    # --set overrides the patch-file's verbosity; job_tags from the file remains.
+    assert json.loads(_patches(seeded_default_org)[0].request.content) == {
+        "verbosity": 5,
+        "job_tags": "base",
+    }
+
+
+def test_apply_stdin_by_id(seeded_default_org: Any) -> None:
+    _seed_jt(seeded_default_org, id_=77, name="byid")
+    result = CliInvoker().invoke(
+        app,
+        ["job-templates", "apply", "--stdin", "--by-id", "--set", "verbosity=4", "--yes"],
+        input="77\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert seeded_default_org.get_record("job_templates", 77)["verbosity"] == 4
+
+
+def test_apply_stdin_unchanged_does_not_patch(seeded_default_org: Any) -> None:
+    _seed_jt(seeded_default_org, verbosity=2)
+    result = CliInvoker().invoke(
+        app,
+        [
+            "job-templates",
+            "apply",
+            "--stdin",
+            "--set",
+            "verbosity=2",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input="deploy\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert _patches(seeded_default_org) == []
+    assert "unchanged" in result.stdout.lower()
+
+
+def test_apply_stdin_consumes_pipe_envelope(seeded_default_org: Any) -> None:
+    """`list --format pipe | apply --stdin` — the headline pipeline."""
+    _seed_jt(seeded_default_org)
+    envelope = json.dumps(
+        {"untaped": "1", "kind": "awx.job-template", "record": {"id": 30, "name": "deploy"}}
+    )
+    result = CliInvoker().invoke(
+        app,
+        [
+            "job-templates",
+            "apply",
+            "--stdin",
+            "--set",
+            "verbosity=9",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input=envelope + "\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert seeded_default_org.get_record("job_templates", 30)["verbosity"] == 9
+
+
+def test_apply_stdin_rejects_unknown_field(seeded_default_org: Any) -> None:
+    _seed_jt(seeded_default_org)
+    result = CliInvoker().invoke(
+        app,
+        [
+            "job-templates",
+            "apply",
+            "--stdin",
+            "--set",
+            "zzz_bogus=1",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input="deploy\n",
+    )
+    assert result.exit_code == 1
+    assert "zzz_bogus" in (result.stderr or result.output)
+    assert _patches(seeded_default_org) == []
