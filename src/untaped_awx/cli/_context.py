@@ -6,7 +6,7 @@ the generic use cases need. Commands construct the context inside a
 ``with`` block to ensure the HTTP client is closed.
 
 This module is the **only** place in ``untaped-awx`` that reads
-core settings (via :func:`untaped.api.plugin_context`); everything
+core settings (via :func:`untaped.api.app_context`); everything
 downstream consumes the package-local :class:`AwxConfig`.
 """
 
@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from types import TracebackType
 from typing import TYPE_CHECKING
 
-from untaped.api import PluginContext, echo, plugin_context
+from untaped.api import AppContext, app_context, echo
 
 from untaped_awx.domain import ResourceSpec
 from untaped_awx.infrastructure import AwxClient, AwxConfig, AwxResourceCatalog
@@ -35,8 +35,8 @@ if TYPE_CHECKING:
 class AwxContext:
     """Holds wired-up dependencies for a single CLI invocation."""
 
-    def __init__(self, context: PluginContext | None = None) -> None:
-        context = context or plugin_context()
+    def __init__(self, context: AppContext | None = None) -> None:
+        context = context or app_context()
         self._context = context
         config = context.section("awx", AwxConfig)
         self.client = AwxClient(config, http=context.http)
@@ -80,7 +80,7 @@ class AwxContext:
 
 @contextmanager
 def open_context() -> Iterator[AwxContext]:
-    ctx = AwxContext(plugin_context())
+    ctx = AwxContext(app_context())
     try:
         yield ctx
     finally:

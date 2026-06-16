@@ -25,7 +25,7 @@ is built into the SDK and works in any token position.
 (`base_url`, `token`, `api_prefix`, `default_organization`, `page_size`).
 The tool's `ToolSpec` (`untaped_awx/__main__.py`) declares this model as the
 `awx` profile settings section, and the CLI composition root
-(`cli/_context.py`) reads it with `plugin_context().section("awx", AwxConfig)`.
+(`cli/_context.py`) reads it with `app_context().section("awx", AwxConfig)`.
 The composition root may import `AwxConfig`; infrastructure clients receive
 it as package-local configuration. Domain and application code stay
 config-free and depend on narrow models/ports instead.
@@ -46,8 +46,8 @@ exported by `untaped.api`).
 Profile selection happens at the root: the SDK's `--profile` option works in
 any token position (the SDK strips the token and re-dispatches), so AWX
 commands expose no command-local `--profile`. Commands that read settings
-call `open_context()`, which resolves a frozen `PluginContext` via the bare
-`plugin_context()`.
+call `open_context()`, which resolves a frozen `AppContext` via the bare
+`app_context()`.
 
 Adding a new field is a three-place edit: `AwxConfig`, the call site that
 needs the value, and tests for loading/env override where relevant.

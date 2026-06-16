@@ -4,7 +4,7 @@ The root ``tests/conftest.py`` resets the core config registry around
 every test. The ``awx`` profile section only exists on the resolved
 ``Settings`` model once the tool has registered it (production:
 ``run_tool`` → ``register_tool``). Mirror that here so the composition
-root's ``plugin_context().section("awx", AwxConfig)`` resolves in tests,
+root's ``app_context().section("awx", AwxConfig)`` resolves in tests,
 the same way it does in a real invocation.
 """
 
