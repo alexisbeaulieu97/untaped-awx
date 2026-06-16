@@ -1,4 +1,4 @@
-"""Architectural-rule tests for the AWX plugin.
+"""Architectural-rule tests for the AWX tool.
 
 Two complementary rules (per ``AGENTS.md`` 4-layer DDD section):
 
@@ -192,7 +192,7 @@ def _discover_package_roots() -> list[tuple[str, Path]]:
 
 
 def test_every_plugin_has_application_layer() -> None:
-    """The AWX plugin must have an ``application/`` directory.
+    """The AWX tool must have an ``application/`` directory.
 
     Keep this guard even in the standalone repo so future package reshapes
     do not accidentally flatten the DDD shell.

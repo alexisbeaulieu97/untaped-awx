@@ -33,7 +33,7 @@ def _noop_progress(label: str) -> Any:
 def _prompt_ui(*, answer: bool, seen: dict[str, object] | None = None) -> Any:
     """A stub UiContext (confirm + no-op progress) injected via ``progress_ui``.
 
-    The preview/confirm gate now lives in core ``batch_apply``; the plugin passes
+    The preview/confirm gate now lives in core ``batch_apply``; the tool passes
     it ``ctx.progress_ui()``, so tests inject the stub there and force
     interactivity by patching ``untaped.batch._stdin_is_interactive``.
     """

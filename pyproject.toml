@@ -1,7 +1,7 @@
 [project]
 name = "untaped-awx"
 version = "0.4.0"
-description = "Ansible Automation Platform / AWX plugin for untaped."
+description = "Ansible Automation Platform / AWX CLI built on the untaped SDK."
 readme = "README.md"
 authors = [
     { name = "Alexis Beaulieu", email = "alexisbeaulieu97@gmail.com" }

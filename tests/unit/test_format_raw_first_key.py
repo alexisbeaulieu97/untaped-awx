@@ -4,7 +4,7 @@
 every row when ``--columns`` is omitted, so the first key of every row
 is load-bearing for shell pipelines (the ``xargs``-into-next-command
 pattern). The catalogue in ``AGENTS.md`` lists every AWX row source,
-and this module pins those sources in the standalone plugin repo.
+and this module pins those sources in the standalone tool repo.
 
 Three parametrised tests pin existing entries:
 
@@ -97,7 +97,7 @@ HAND_BUILT_ROW_SOURCES: list[tuple[str, Callable[[], dict[str, object]], str]] =
 #
 # Scope is the set of modules that host any catalogued row source today
 # (enforced by ``test_every_catalogued_pydantic_module_is_discovery_registered``).
-# Globbing every domain module in every plugin repo would pull in many
+# Globbing every domain module in every tool repo would pull in many
 # BaseModels (envelope, payloads, manifest, filter VOs, …) of which only
 # a handful are row sources, so the exempt bookkeeping would dominate;
 # a new AWX row model in a new module is the bounded gap, caught loudly

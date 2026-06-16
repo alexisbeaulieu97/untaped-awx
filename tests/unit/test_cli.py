@@ -96,10 +96,10 @@ def test_ping_rejects_command_local_profile_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Profile selection belongs to the untaped-profile plugin.
+    """Profile selection is built into the SDK.
 
     Commands do not expose a local ``--profile``, so passing one
-    directly to the plugin app is an unknown-option error (exit 2).
+    directly to the tool app is an unknown-option error (exit 2).
     """
     cfg = tmp_path / "config.yml"
     cfg.write_text(
