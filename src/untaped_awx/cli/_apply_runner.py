@@ -10,14 +10,27 @@ application-layer :class:`ApplyFile` use case (which only sees a
 from collections.abc import Iterable
 from pathlib import Path
 
-from untaped.api import OutputFormat, clamp_parallel, echo, raise_usage, render_rows
+from untaped.api import (
+    ConfigError,
+    OutputFormat,
+    clamp_parallel,
+    echo,
+    raise_usage,
+    read_identifiers,
+    render_rows,
+    resolve_each,
+)
+from untaped.errors import UntapedError
 
-from untaped_awx.application import ApplyFile, ApplyResource
+from untaped_awx.application import ApplyFile, ApplyResource, GetResource
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
 from untaped_awx.application.ports import ResourceDocumentReader
-from untaped_awx.cli._context import AwxContext
+from untaped_awx.cli._context import AwxContext, scope_for_command
+from untaped_awx.cli._overlay import build_overlay
+from untaped_awx.cli._pipe import id_field_for
 from untaped_awx.cli.format import diff_lines, outcome_rows
-from untaped_awx.domain import Resource
+from untaped_awx.domain import ApplyOutcome, Metadata, Resource
+from untaped_awx.infrastructure.spec import AwxResourceSpec
 from untaped_awx.infrastructure.yaml_io import read_resources
 
 
@@ -50,6 +63,68 @@ def run_apply(
             for line in diff_lines(outcome):
                 echo(line, err=True)
     if any(o.action == "failed" for o in outcomes):
+        raise SystemExit(1)
+
+
+def run_apply_stdin(
+    ctx: AwxContext,
+    spec: AwxResourceSpec,
+    *,
+    write: bool,
+    set_pairs: list[str] | None,
+    patch_file: Path | None,
+    by_id: bool,
+    organization: str | None = None,
+    inventory: str | None = None,
+    inventory_organization: str | None = None,
+    fmt: OutputFormat = "table",
+    columns: list[str] | None = None,
+) -> None:
+    """Mass-patch a piped selection: resolve each target, overlay, apply.
+
+    The overlay (``--set`` + ``--patch-file``) becomes a synthetic
+    ``Resource.spec`` per resolved item, run through
+    :meth:`ApplyResource.apply_to_existing` — so it reuses the file-apply
+    diff / secret-guard / FK machinery and never creates. Preview by default;
+    ``write`` (``--yes``) issues the sparse PATCH. Writes to stdout/stderr.
+    """
+    overlay = build_overlay(set_pairs, patch_file)
+    settable = set(spec.canonical_fields) | set(spec.identity_keys)
+    unknown = sorted(field for field in overlay if field not in settable)
+    if unknown:
+        raise ConfigError(f"unknown field(s) for {spec.kind}: {', '.join(unknown)}")
+
+    ids = read_identifiers([], stdin=True, id_field=id_field_for(spec, by_id=by_id))
+    scope = scope_for_command(
+        ctx, organization, spec, inventory=inventory, inventory_organization=inventory_organization
+    )
+    getter = GetResource(ctx.repo)
+    resolved, any_failed = resolve_each(
+        ids,
+        lambda ident: (ident, getter.by_identifier(spec, ident, scope=scope, by_id=by_id)),
+    )
+    apply_one = _build_apply_resource(ctx)
+    outcomes: list[ApplyOutcome] = []
+    for ident, record in resolved:
+        resource = Resource(
+            kind=spec.kind,
+            metadata=Metadata(name=str(record.get("name", ident))),
+            spec=dict(overlay),
+        )
+        try:
+            outcomes.append(apply_one.apply_to_existing(resource, record, write=write))
+        except UntapedError as exc:
+            echo(f"error: {ident}: {exc}", err=True)
+            any_failed = True
+
+    if outcomes:
+        rows = outcome_rows(outcomes)
+        echo(render_rows(rows, fmt=fmt, columns=columns, kind="awx.apply-outcome"))
+    if not write:
+        for outcome in outcomes:
+            for line in diff_lines(outcome):
+                echo(line, err=True)
+    if any_failed:
         raise SystemExit(1)
 
 
@@ -87,4 +162,4 @@ def _build_apply_resource(ctx: AwxContext) -> ApplyResource:
     )
 
 
-__all__ = ["run_apply"]
+__all__ = ["run_apply", "run_apply_stdin"]

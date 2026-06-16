@@ -80,22 +80,7 @@ class ApplyResource:
         written, :class:`ApplyFile` calls :meth:`reconcile_memberships`
         to drive the deferred writes against now-existing siblings.
         """
-        spec = self._catalog.get(resource.kind)
-        # ``read_only`` kinds (Credential, Inventory, Organization,
-        # CredentialType, plus the catalog-only stubs
-        # ExecutionEnvironment/Label/InstanceGroup) are not roundtrippable
-        # yet — per-kind sub-apps already hide ``apply``, but the top-level
-        # ``untaped awx apply <file>`` reaches this use case directly via
-        # ``apply_file`` and would otherwise issue create/update calls for
-        # resources whose CRUD is deferred. Reject at the boundary.
-        if spec.fidelity == "read_only":
-            raise BadRequest(
-                f"{spec.kind} does not support apply (fidelity={spec.fidelity!r}); "
-                "edit this resource via the AWX UI or API directly."
-            )
-        identity = self._planner.plan_identity(spec, resource)
-        payload = self._planner.plan_payload(spec, resource, fk=self._fk)
-        strategy = self._strategies.get(spec.apply_strategy)
+        spec, identity, payload, strategy = self._prepare(resource)
         existing = strategy.find_existing(spec, identity, client=self._client, fk=self._fk)
         return self._dispatch(
             spec=spec,
@@ -107,6 +92,61 @@ class ApplyResource:
             write=write,
             defer_memberships=defer_memberships,
         )
+
+    def apply_to_existing(
+        self,
+        resource: Resource,
+        existing: dict[str, Any],
+        *,
+        write: bool = False,
+        defer_memberships: bool = False,
+    ) -> ApplyOutcome:
+        """Apply ``resource``'s fields against an already-resolved record.
+
+        The ``apply --stdin`` mass-patch path resolves its selection (by name or
+        id) up front and hands the fetched record here, so we skip
+        ``find_existing``. Because ``existing`` is always a real record this can
+        only ever **update** — it never creates — which is exactly what the
+        selection path needs (you patch items you listed, never declare new
+        ones). Reuses the same diff / secret-preservation / FK / membership
+        logic as :meth:`__call__`.
+        """
+        spec, identity, payload, strategy = self._prepare(resource)
+        return self._dispatch(
+            spec=spec,
+            resource=resource,
+            identity=identity,
+            payload=payload,
+            existing=existing,
+            strategy=strategy,
+            write=write,
+            defer_memberships=defer_memberships,
+        )
+
+    def _prepare(
+        self, resource: Resource
+    ) -> tuple[ResourceSpec, dict[str, Any], dict[str, Any], ApplyStrategy]:
+        """Resolve spec, identity, planned payload, and strategy for a doc.
+
+        Shared by :meth:`__call__` and :meth:`apply_to_existing`. Rejects
+        ``read_only`` kinds (Credential, Inventory, Organization,
+        CredentialType, plus the catalog-only stubs
+        ExecutionEnvironment/Label/InstanceGroup) at the boundary — per-kind
+        sub-apps already hide ``apply``, but the top-level ``untaped awx apply
+        <file>`` reaches this use case directly via ``apply_file`` and would
+        otherwise issue create/update calls for resources whose CRUD is
+        deferred.
+        """
+        spec = self._catalog.get(resource.kind)
+        if spec.fidelity == "read_only":
+            raise BadRequest(
+                f"{spec.kind} does not support apply (fidelity={spec.fidelity!r}); "
+                "edit this resource via the AWX UI or API directly."
+            )
+        identity = self._planner.plan_identity(spec, resource)
+        payload = self._planner.plan_payload(spec, resource, fk=self._fk)
+        strategy = self._strategies.get(spec.apply_strategy)
+        return spec, identity, payload, strategy
 
     def reconcile_memberships(self, resource: Resource) -> list[FieldChange]:
         """Phase 2 of two-phase apply: write deferred sub-endpoint memberships.

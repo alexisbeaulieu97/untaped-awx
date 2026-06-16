@@ -615,6 +615,84 @@ def test_create_raises_when_response_lacks_id_with_membership() -> None:
         apply(resource, write=True)
 
 
+# ── apply_to_existing: update-only seam for the `apply --stdin` mass-patch path ──
+
+
+def test_apply_to_existing_updates_passed_record_and_never_creates() -> None:
+    """``apply_to_existing`` patches the record it's handed and never creates.
+
+    The strategy's ``find_existing`` returns ``None`` (so ``__call__`` would
+    *create*), but ``apply_to_existing`` uses the record passed in and only ever
+    updates — the contract the ``--stdin`` selection path relies on (you patch
+    items you listed, you never declare new ones).
+    """
+    existing = {
+        "id": 42,
+        "name": "deploy",
+        "organization": 1,
+        "description": "old",
+        "playbook": "deploy.yml",
+    }
+    strategy = _StubStrategy(existing=None)
+    apply = _make_apply(
+        catalog_specs={"JobTemplate": JOB_TEMPLATE_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+    )
+    resource = Resource(
+        kind="JobTemplate",
+        metadata=Metadata(name="deploy"),
+        spec={"description": "new"},
+    )
+    outcome = apply.apply_to_existing(resource, existing, write=True)
+    assert outcome.action == "updated"
+    assert strategy.created is None  # never created, despite find_existing→None
+    assert strategy.updated is not None
+    _, patch_payload = strategy.updated
+    assert patch_payload == {"description": "new"}  # sparse PATCH, changed field only
+
+
+def test_apply_to_existing_preview_does_not_write() -> None:
+    existing = {
+        "id": 42,
+        "name": "deploy",
+        "organization": 1,
+        "description": "old",
+        "playbook": "deploy.yml",
+    }
+    strategy = _StubStrategy(existing=existing)
+    apply = _make_apply(
+        catalog_specs={"JobTemplate": JOB_TEMPLATE_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+    )
+    resource = Resource(
+        kind="JobTemplate",
+        metadata=Metadata(name="deploy"),
+        spec={"description": "new"},
+    )
+    outcome = apply.apply_to_existing(resource, existing)  # write defaults False
+    assert outcome.action == "preview"
+    assert strategy.updated is None
+
+
+def test_apply_to_existing_rejects_read_only_kind() -> None:
+    strategy = _StubStrategy(existing={"id": 1, "name": "scm-key", "organization": 1})
+    apply = _make_apply(
+        catalog_specs={"Credential": CREDENTIAL_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+    )
+    resource = Resource(
+        kind="Credential",
+        metadata=Metadata(name="scm-key"),
+        spec={"description": "x"},
+    )
+    with pytest.raises(BadRequest, match="does not support apply"):
+        apply.apply_to_existing(resource, {"id": 1, "name": "scm-key"}, write=True)
+    assert strategy.updated is None
+
+
 # ── parallelism invariant: ApplyResource has no per-call attribute rebinds ──
 
 

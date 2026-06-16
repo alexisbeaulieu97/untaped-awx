@@ -357,14 +357,23 @@ def test_apply_rejects_removed_file_alias(
     assert "--file" in result.output or "-f" in result.output
 
 
-@pytest.mark.parametrize("cmd", [["apply"], ["job-templates", "apply"]])
-def test_apply_bare_invocation_is_missing_argument_error(cmd: list[str]) -> None:
-    """Bare ``apply`` is a missing-required-positional usage error: exit 2,
+def test_top_level_apply_bare_invocation_is_missing_argument_error() -> None:
+    """Top-level multi-kind ``apply`` still requires a positional file: exit 2,
     Cyclopts' ``requires an argument`` message on stderr, nothing on stdout —
     the suite convention for required positionals."""
-    result = CliInvoker().invoke(app, cmd)
+    result = CliInvoker().invoke(app, ["apply"])
     assert result.exit_code == 2
     assert "requires an argument" in result.stderr
+    assert result.stdout == ""
+
+
+def test_per_kind_apply_bare_invocation_needs_file_or_stdin() -> None:
+    """Per-kind ``apply`` takes a file *or* ``--stdin`` (mass-patch a selection).
+    With neither it's a usage error that names both options; exit 2, clean
+    stdout."""
+    result = CliInvoker().invoke(app, ["job-templates", "apply"])
+    assert result.exit_code == 2
+    assert "--stdin" in result.stderr
     assert result.stdout == ""
 
 
