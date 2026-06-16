@@ -1,6 +1,6 @@
 # AWX / AAP
 
-`untaped awx` talks to **Ansible Automation Platform** (AAP) and
+`untaped-awx` talks to **Ansible Automation Platform** (AAP) and
 **upstream AWX** through their REST API. It's built around two
 workflows:
 
@@ -10,44 +10,44 @@ workflows:
   write). Works as a backup/restore tool and as a way to keep AWX
   configuration under git.
 
-Plus a small testing surface (`awx test`) that runs declarative,
+Plus a small testing surface (`untaped-awx test`) that runs declarative,
 parameterised launch matrices against a job template.
 
 ## Command map
 
-- Resource workflows: `awx <kind> list|get|save|apply|delete`
-- Job operations: `awx job-templates launch`, `awx workflow-templates launch`,
-  `awx projects update`
-- Bulk configuration: `awx apply`, `awx save --all-kinds`
-- Execution inspection: `awx jobs list|get|events|logs|wait`
-- Cross-kind discovery: `awx unified-templates`
-- Workflow inspection: `awx workflow-templates nodes`
-- Reverse lookup: `awx job-templates usage`, `awx workflow-templates usage`
-- Declarative launch checks: `awx test lint|render|run`
+Each row is an `untaped-awx` subcommand:
+
+- Resource workflows: `<kind> list|get|save|apply|delete`
+- Job operations: `job-templates launch`, `workflow-templates launch`,
+  `projects update`
+- Bulk configuration: `apply`, `save --all-kinds`
+- Execution inspection: `jobs list|get|events|logs|wait`
+- Cross-kind discovery: `unified-templates`
+- Workflow inspection: `workflow-templates nodes`
+- Reverse lookup: `job-templates usage`, `workflow-templates usage`
+- Declarative launch checks: `test lint|render|run`
 
 ## Setup
 
 ```bash
-untaped config set awx.base_url https://aap.example.com
-untaped config set awx.token <bearer-token>
+untaped-awx config set awx.base_url https://aap.example.com
+untaped-awx config set awx.token <bearer-token>
 # Upstream AWX users only — AAP defaults to /api/controller/v2/
-untaped config set awx.api_prefix /api/v2/
+untaped-awx config set awx.api_prefix /api/v2/
 
 # Optional: name disambiguation for get/launch/update/per-kind save/apply
 # when the same name exists in multiple orgs. Does NOT scope `list`;
 # use `--org` on top-level bulk save when backing up one organization.
-untaped config set awx.default_organization Engineering
+untaped-awx config set awx.default_organization Engineering
 
 # Health check
-untaped awx ping
+untaped-awx ping
 ```
 
-Profile selection is the root `--profile <name>` option contributed by the
-[`untaped-profile`](https://github.com/alexisbeaulieu97/untaped-profile)
-plugin (install it to use profiles); place it before the command group:
-`untaped --profile prod awx ping`.
+Profile selection is built into the SDK: the root `--profile <name>` option
+works in any token position, e.g. `untaped-awx --profile prod ping`.
 
-The token is treated as a secret (`SecretStr`): `untaped config list`
+The token is treated as a secret (`SecretStr`): `untaped-awx config list`
 redacts it as `***` unless you pass `--show-secrets`. See
 [`untaped` configuration docs](https://github.com/alexisbeaulieu97/untaped/blob/main/docs/configuration.md)
 for the full schema, profiles, and TLS knobs (corporate CAs work out of
@@ -55,7 +55,7 @@ the box via the OS trust store).
 
 ## Resources, kinds, fidelity
 
-`untaped` exposes one sub-app per AWX resource kind. What's CRUDable
+`untaped-awx` exposes one sub-app per AWX resource kind. What's CRUDable
 versus read-only depends on a per-kind **fidelity** tier:
 
 | Sub-app              | Kind                  | Fidelity  | save | apply | notes                                                       |
@@ -71,7 +71,7 @@ versus read-only depends on a per-kind **fidelity** tier:
 
 Read-only kinds are still useful for FK resolution: when you `apply` a
 JobTemplate that references `Engineering` as its organization,
-`untaped` looks the name up against `organizations` to get the id.
+`untaped-awx` looks the name up against `organizations` to get the id.
 
 Saves below `full` echo the fidelity tier to stderr and embed an
 inline YAML comment so the loss is visible.
@@ -82,20 +82,20 @@ Every CRUDable kind has the same shape; replace `<kind>` with one of
 the sub-apps above.
 
 ```bash
-untaped awx <kind> list [--search <q>] [--filter KEY=VALUE]... [--limit N]
+untaped-awx <kind> list [--search <q>] [--filter KEY=VALUE]... [--limit N]
                         [--stdin] [--by-id] [--with-names]
                         [--format json|yaml|table|raw|pipe] [--columns ...]
 
-untaped awx <kind> get <name>... [--stdin] [--organization <org>|--org <org>]
+untaped-awx <kind> get <name>... [--stdin] [--organization <org>|--org <org>]
                                  [--by-id] [--with-names]
                                  [--format yaml|json|table|raw|pipe] [--columns ...]
 
-untaped awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
+untaped-awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
 
-untaped awx <kind> apply FILE [--yes] [--fail-fast]
+untaped-awx <kind> apply FILE [--yes] [--fail-fast]
                          [--format json|yaml|table|raw|pipe] [--columns ...]
 
-untaped awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
+untaped-awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
                                       [--organization <org>|--org <org>] [--by-id]
                                       [--format json|yaml|table|raw|pipe] [--columns ...]
 # Exactly one of {positional names, --stdin} must be supplied.
@@ -105,10 +105,10 @@ untaped awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
 Django-style lookup it supports works without code changes:
 
 ```bash
-untaped awx job-templates list --filter organization__name=Engineering
-untaped awx job-templates list --filter name__icontains=deploy \
+untaped-awx job-templates list --filter organization__name=Engineering
+untaped-awx job-templates list --filter name__icontains=deploy \
                                --filter playbook__contains=deploy.yml
-untaped awx projects list --filter scm_type=git --filter status=successful
+untaped-awx projects list --filter scm_type=git --filter status=successful
 ```
 
 `--with-names` flips FK columns from numeric ids to the names AWX
@@ -118,12 +118,12 @@ which is what the FK-piping shape relies on:
 
 ```bash
 # Human-readable list — names instead of ids
-untaped awx job-templates list --with-names
+untaped-awx job-templates list --with-names
 
 # Pipe-friendly: ids feed the next explicit id lookup.
-untaped awx job-templates list --columns project --format raw \
+untaped-awx job-templates list --columns project --format raw \
   | sort -u \
-  | untaped awx projects get --stdin --by-id --columns name
+  | untaped-awx projects get --stdin --by-id --columns name
 ```
 
 `--stdin` flips `list` into a consumer: it reads newline-separated
@@ -138,7 +138,7 @@ different mode.
 ```bash
 # Curated tabular view across a known set of templates
 echo -e "deploy-web\ndeploy-api" \
-  | untaped awx job-templates list --stdin --with-names \
+  | untaped-awx job-templates list --stdin --with-names \
                                    --columns name --columns project
 ```
 
@@ -153,15 +153,15 @@ re-remove, so they're safe to run repeatedly).
 
 ```bash
 # Add hosts directly
-untaped awx groups hosts add prod-web host-01 host-02
+untaped-awx groups hosts add prod-web host-01 host-02
 
 # Pipe-friendly: feed a filtered host set into a group
-untaped awx hosts list --filter inventory__name=prod \
+untaped-awx hosts list --filter inventory__name=prod \
                        --columns name --format raw \
-  | untaped awx groups hosts add prod-web --stdin
+  | untaped-awx groups hosts add prod-web --stdin
 
 # Remove the inverse
-untaped awx groups hosts remove prod-web host-01
+untaped-awx groups hosts remove prod-web host-01
 ```
 
 For nested fields outside the FK set (e.g. last-job status, polymorphic
@@ -169,10 +169,10 @@ schedule parents), use dotted column paths — `format_output` walks
 nested dicts:
 
 ```bash
-untaped awx job-templates list \
+untaped-awx job-templates list \
   --columns name --columns summary_fields.last_job.status --format table
 
-untaped awx schedules list \
+untaped-awx schedules list \
   --columns name --columns summary_fields.unified_job_template.name --format table
 ```
 
@@ -217,18 +217,18 @@ intentionally do not expose `delete`.
 
 ```bash
 # Single delete, interactive (prompts before calling DELETE).
-untaped awx job-templates delete deploy --org Engineering
+untaped-awx job-templates delete deploy --org Engineering
 
 # Skip the prompt (required for scripts / pipelines).
-untaped awx job-templates delete deploy --yes
+untaped-awx job-templates delete deploy --yes
 
 # Batch from stdin — refuses to consume stdin without --yes or --dry-run.
-untaped awx job-templates list --filter name__startswith=staging- --columns id -f raw \
-  | untaped awx job-templates delete --stdin --by-id --yes
+untaped-awx job-templates list --filter name__startswith=staging- --columns id -f raw \
+  | untaped-awx job-templates delete --stdin --by-id --yes
 
 # Preview first: resolves every id and prints what would be deleted.
-untaped awx job-templates list --filter name__startswith=staging- --columns id -f raw \
-  | untaped awx job-templates delete --stdin --by-id --dry-run
+untaped-awx job-templates list --filter name__startswith=staging- --columns id -f raw \
+  | untaped-awx job-templates delete --stdin --by-id --dry-run
 ```
 
 Identifier semantics match `get`/`save`: identifiers are names by
@@ -252,7 +252,7 @@ a template before deleting the template).
 ### `launch` (job templates and workflow templates)
 
 ```bash
-untaped awx job-templates launch <name>... [--stdin]
+untaped-awx job-templates launch <name>... [--stdin]
     [--by-id]
     [--extra-vars KEY=VAL]... [--limit <pattern>]
     [--inventory <name>] [--credential <name>]...
@@ -272,21 +272,21 @@ loudly rather than silently dropped.
 ### `update` (projects only)
 
 ```bash
-untaped awx projects update <name> [--by-id] [--organization <org>|--org <org>] [--wait]
+untaped-awx projects update <name> [--by-id] [--organization <org>|--org <org>] [--wait]
 ```
 
 Triggers an SCM sync on the project.
 
 ## Top-level commands
 
-### `untaped awx apply` (multi-kind)
+### `untaped-awx apply` (multi-kind)
 
 ```bash
-untaped awx apply FILE_OR_DIR [--yes] [--fail-fast]
+untaped-awx apply FILE_OR_DIR [--yes] [--fail-fast]
 ```
 
 Apply a single file or a whole directory of YAML envelopes. When
-multiple kinds are present, `untaped` orders them by their declared FK
+multiple kinds are present, `untaped-awx` orders them by their declared FK
 dependencies so referenced resources exist before referencing ones:
 
 ```text
@@ -300,17 +300,17 @@ exist solely so launch and apply payloads can resolve names to ids. They
 appear in the spec order for FK lookup tie-breaking, but have no CLI sub-app
 and are not standalone apply/save targets.
 
-Per-kind `apply` (e.g. `awx job-templates apply`) only writes its own
-kind — wrong-kind docs in the file are warned about and never written.
-Use the top-level `awx apply` when you want the dependency ordering.
+Per-kind `apply` (e.g. `untaped-awx job-templates apply`) only writes its
+own kind — wrong-kind docs in the file are warned about and never written.
+Use the top-level `untaped-awx apply` when you want the dependency ordering.
 
-### `untaped awx save --all-kinds` (bulk dump)
+### `untaped-awx save --all-kinds` (bulk dump)
 
 ```bash
-untaped awx save --out-dir backup/ --all-kinds
-untaped awx save --out-dir backup/ --all-kinds --org Engineering
-untaped awx save --out-dir backup/ --kind JobTemplate
-untaped awx save --out-dir backup/ --kind hosts --org Engineering
+untaped-awx save --out-dir backup/ --all-kinds
+untaped-awx save --out-dir backup/ --all-kinds --org Engineering
+untaped-awx save --out-dir backup/ --kind JobTemplate
+untaped-awx save --out-dir backup/ --kind hosts --org Engineering
 ```
 
 Use `--all-kinds`; bare `--all` is reserved across
@@ -339,7 +339,7 @@ advanced endpoint-specific filtering. Do not combine raw organization
 filters such as `organization__name=…` with `--org`; the command fails
 up front instead of silently double-scoping.
 
-### `untaped awx jobs`
+### `untaped-awx jobs`
 
 Read-only access to execution records — useful after a launch.
 
@@ -349,24 +349,24 @@ All `jobs` subcommands take a common `--kind` discriminator (default
 
 ```bash
 # Newest-first list. Default columns: id,name,status.
-untaped awx jobs list [--status STATUS] [--filter K=V]... [--limit N]
+untaped-awx jobs list [--status STATUS] [--filter K=V]... [--limit N]
 
 # One or more job records (defaults to YAML). Multiple ids may be
 # passed positionally or via --stdin.
-untaped awx jobs get <id> [<id>...] [--stdin]
+untaped-awx jobs get <id> [<id>...] [--stdin]
 
 # Structured per-task events. Default columns: counter,event,host_name,task.
 # --filter reaches AWX server-side (event=runner_on_failed, host=web-01, …).
 # --follow polls until the job is terminal; --from-counter N skips early events.
-untaped awx jobs events <id> [<id>...] [--stdin] [--follow] [--from-counter N] [--filter K=V]...
+untaped-awx jobs events <id> [<id>...] [--stdin] [--follow] [--from-counter N] [--filter K=V]...
 
 # Plain stdout (default --format raw). --follow polls until terminal;
 # --tail N keeps the last N historical lines before any follow phase;
 # --grep PATTERN is client-side regex (case-insensitive with -i).
-untaped awx jobs logs <id> [<id>...] [--stdin] [--follow|-f] [--tail N] [--grep PATTERN] [-i]
+untaped-awx jobs logs <id> [<id>...] [--stdin] [--follow|-f] [--tail N] [--grep PATTERN] [-i]
 
 # Block until terminal. Exits 1 on --timeout (per id).
-untaped awx jobs wait <id> [<id>...] [--stdin] [--timeout SECS]
+untaped-awx jobs wait <id> [<id>...] [--stdin] [--timeout SECS]
 ```
 
 `jobs events --follow` is format-aware: `--format table` (default)
@@ -385,11 +385,11 @@ Multi-id `get` / `wait` aggregate their results; multi-id `logs` /
 jobs. Pipeline-friendly:
 
 ```bash
-untaped awx jobs list --status failed --format raw \
-  | untaped awx jobs logs --stdin
+untaped-awx jobs list --status failed --format raw \
+  | untaped-awx jobs logs --stdin
 ```
 
-### `untaped awx unified-templates`
+### `untaped-awx unified-templates`
 
 Read-only browser over AWX's `/unified_job_templates/` virtual collection,
 which interleaves `JobTemplate`, `WorkflowJobTemplate`, `Project`, and
@@ -401,12 +401,12 @@ which interleaves `JobTemplate`, `WorkflowJobTemplate`, `Project`, and
 # fields differ across kinds (JT/WJT use `last_job_status`; Project /
 # InventorySource use `status`), so any one column would be empty for
 # half the rows. Opt in via --columns.
-untaped awx unified-templates list [--type TYPE] [--filter K=V]... [--limit N]
+untaped-awx unified-templates list [--type TYPE] [--filter K=V]... [--limit N]
 
 # id-only. Names are not unique across kinds, so this fast-fails on a
 # non-decimal identifier with a message pointing at the per-kind
 # sub-apps for name lookup.
-untaped awx unified-templates get <id> [<id>...] [--stdin]
+untaped-awx unified-templates get <id> [<id>...] [--stdin]
 ```
 
 `--type TYPE` is sugar for `--filter type=…`; passing both with
@@ -414,7 +414,7 @@ conflicting values is rejected. Launch dispatch is intentionally out of
 scope here — use the per-kind sub-apps (`job-templates launch`,
 `projects update`, …).
 
-### `untaped awx workflow-templates nodes`
+### `untaped-awx workflow-templates nodes`
 
 Read-only inspector for a workflow's contents — answers "which jobs
 run inside this workflow?". Lives on the `workflow-templates` sub-app
@@ -425,40 +425,40 @@ shows *what* runs, not the DAG structure.
 ```bash
 # Top-level nodes only. Default columns: id,name,type,depth. Add
 # repeated ``--columns`` flags if you want the DAG label.
-untaped awx workflow-templates nodes <name> [--by-id] [--organization ORG|--org ORG] \
+untaped-awx workflow-templates nodes <name> [--by-id] [--organization ORG|--org ORG] \
   --columns id --columns identifier --columns name --columns type --columns depth
 
 # Flatten sub-workflows. ``depth`` tags each row's distance from the
 # root (0 = root's own nodes, 1 = one sub-workflow deep, …).
-untaped awx workflow-templates nodes <name> --recursive
-untaped awx workflow-templates nodes <name> --recursive --depth 2
+untaped-awx workflow-templates nodes <name> --recursive
+untaped-awx workflow-templates nodes <name> --recursive --depth 2
 
 # ``--depth N`` for N>0 implies ``--recursive``; ``--depth 0`` means
 # "only the root" (the default when neither flag is passed).
-untaped awx workflow-templates nodes <name> --depth 1
+untaped-awx workflow-templates nodes <name> --depth 1
 
 # Narrow the output to one template-type discriminator. Traversal
 # still descends into every workflow node, so ``--type job_template``
 # combined with ``--recursive`` shows every job template anywhere in
 # the workflow tree.
-untaped awx workflow-templates nodes <name> --recursive --type job_template
-untaped awx workflow-templates nodes <name> --type workflow_job_template
+untaped-awx workflow-templates nodes <name> --recursive --type job_template
+untaped-awx workflow-templates nodes <name> --type workflow_job_template
 
 # Pipe multiple workflow roots in via stdin. The node trees are
 # concatenated in input order (one BFS per root). Pairs cleanly with
 # ``list --filter ... -f raw -c id`` to fan out across an org.
-untaped awx workflow-templates list --filter organization__name=Default -f raw -c id \
-  | untaped awx workflow-templates nodes --stdin --by-id --recursive --type job_template -f raw -c name \
+untaped-awx workflow-templates list --filter organization__name=Default -f raw -c id \
+  | untaped-awx workflow-templates nodes --stdin --by-id --recursive --type job_template -f raw -c name \
   | grep '^t_' | sort -u
 
 # Server-side filter: ``--filter KEY=VALUE`` (repeatable, Django-style,
 # same shape as ``list --filter``). Reverse-lookup which workflows in
 # an org directly reference any JT in a given name set, without
 # fetching every node and grepping client-side.
-untaped awx workflow-templates list \
+untaped-awx workflow-templates list \
     --filter organization__name=Default -f raw -c id -c name \
   | while IFS=$'\t' read wid wname; do
-      untaped awx workflow-templates nodes "$wid" --by-id \
+      untaped-awx workflow-templates nodes "$wid" --by-id \
           --filter "unified_job_template__name__in=t_foo,t_bar" \
           -f raw -c id \
         | grep -q . && echo "$wname"
@@ -469,9 +469,9 @@ untaped awx workflow-templates list \
 # AWX-side nested field is reachable. Combined with ``--stdin``, this
 # eliminates the shell loop for cross-workflow queries — each row is
 # self-describing.
-untaped awx workflow-templates list \
+untaped-awx workflow-templates list \
     --filter organization__name=Default -f raw -c id \
-  | untaped awx workflow-templates nodes --stdin --by-id --recursive \
+  | untaped-awx workflow-templates nodes --stdin --by-id --recursive \
       --type job_template -f raw \
       -c summary_fields.workflow_job_template.name -c name \
   | sort -u
@@ -491,7 +491,7 @@ With `--filter`, the filter is applied server-side on each
 BFS level, so a filter that excludes sub-workflow rows will prune
 them and stop the descent at that node.
 
-### `untaped awx job-templates usage` / `workflow-templates usage`
+### `untaped-awx job-templates usage` / `workflow-templates usage`
 
 The reverse of `nodes` — answers "which workflows run this template?",
 the impact-analysis question to ask before changing or deleting one.
@@ -505,30 +505,30 @@ filtered query per lookup (`workflow_job_template_nodes/
 # Direct parents only (the default). Default columns:
 # id,name,depth,node_count — ``node_count`` says how many nodes in
 # that workflow reference the template.
-untaped awx job-templates usage <name> [--by-id] [--organization ORG|--org ORG] \
+untaped-awx job-templates usage <name> [--by-id] [--organization ORG|--org ORG] \
   --columns id --columns name --columns depth --columns node_count
 
 # Nested workflows reverse-lookup the same way.
-untaped awx workflow-templates usage <name>
+untaped-awx workflow-templates usage <name>
 
 # Walk up the ancestry: parents of parents surface with increasing
 # ``depth`` (0 = direct parent, 1 = grandparent, …). ``--depth N`` for
 # N>0 implies ``--recursive``; ``--depth 0`` means "direct parents
 # only" (the default when neither flag is passed).
-untaped awx job-templates usage <name> --recursive
-untaped awx job-templates usage <name> --depth 1
+untaped-awx job-templates usage <name> --recursive
+untaped-awx job-templates usage <name> --depth 1
 
 # Impact-analysis fan-out: which workflows would a change to any of
 # these templates touch? Dedup is per target, so ``sort -u`` collapses
 # shared parents across targets.
-untaped awx job-templates list --filter organization__name=Default -f raw -c name \
-  | untaped awx job-templates usage --stdin -f raw -c name \
+untaped-awx job-templates list --filter organization__name=Default -f raw -c name \
+  | untaped-awx job-templates usage --stdin -f raw -c name \
   | sort -u
 
 # Server-side filter: ``--filter KEY=VALUE`` (repeatable, Django-style)
 # narrows the node query at every ancestry level, e.g. scope the
 # containing workflows to one org.
-untaped awx job-templates usage <name> \
+untaped-awx job-templates usage <name> \
   --filter workflow_job_template__organization__name=Default
 ```
 
@@ -543,7 +543,7 @@ its direct references. With `--stdin`, a per-target failure (unknown
 template, lookup error) emits `warning: <identifier>: <exc>` to stderr
 and forces a non-zero exit; valid targets still emit their rows.
 
-## Test suites — `untaped awx test`
+## Test suites — `untaped-awx test`
 
 Declarative, parameterised launch matrices against a job template.
 One file = one job template + many input variations + one
@@ -551,9 +551,9 @@ pass/fail report. v1 verdict is AWX's `successful` job status; richer
 assertions land in v2 (the `assert:` block is reserved).
 
 ```bash
-untaped awx test list     FILE_OR_DIR...           # cases that would run
-untaped awx test validate FILE_OR_DIR...           # render + parse + resolve, no launch
-untaped awx test run      FILE_OR_DIR... [--case NAME]...
+untaped-awx test list     FILE_OR_DIR...           # cases that would run
+untaped-awx test validate FILE_OR_DIR...           # render + parse + resolve, no launch
+untaped-awx test run      FILE_OR_DIR... [--case NAME]...
                                          [--parallel N] [--timeout SECS]
                                          [--show-logs] [--format ...]
 
@@ -647,21 +647,21 @@ client update.
 
 ```bash
 # Save from staging.
-untaped --profile staging awx job-templates save "Deploy app" \
+untaped-awx --profile staging job-templates save "Deploy app" \
   > deploy-app.yml
 
 # Preview against prod (no write).
-untaped --profile prod awx job-templates apply deploy-app.yml
+untaped-awx --profile prod job-templates apply deploy-app.yml
 
 # Looks right? Apply for real.
-untaped --profile prod awx job-templates apply deploy-app.yml --yes
+untaped-awx --profile prod job-templates apply deploy-app.yml --yes
 ```
 
 Or back up and restore in bulk:
 
 ```bash
-untaped --profile staging awx save --out-dir backup-staging/ --all-kinds
-untaped --profile prod awx apply backup-staging/ --yes
+untaped-awx --profile staging save --out-dir backup-staging/ --all-kinds
+untaped-awx --profile prod apply backup-staging/ --yes
 ```
 
 Apply ordering ensures Organizations and Credentials land before the
