@@ -33,7 +33,7 @@ def to_awx_error(err: HttpError) -> UntapedError:
     if status == 401:
         return ConfigError(
             "AWX rejected the token (HTTP 401); update via "
-            "`untaped config set awx.token <new-token>`"
+            "`untaped-awx config set awx.token <new-token>`"
         )
     if status == 403:
         return PermissionDenied(

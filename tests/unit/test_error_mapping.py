@@ -14,7 +14,9 @@ def _http_error(status: int, body: str = "") -> HttpError:
 def test_401_maps_to_config_error() -> None:
     err = to_awx_error(_http_error(401, '{"detail":"invalid token"}'))
     assert isinstance(err, ConfigError)
-    assert "awx.token" in str(err)
+    # Names this tool's own command, not the retired central `untaped` command.
+    assert "`untaped-awx config set awx.token <new-token>`" in str(err)
+    assert "untaped config set" not in str(err)
 
 
 def test_403_maps_to_permission_denied_with_body() -> None:
