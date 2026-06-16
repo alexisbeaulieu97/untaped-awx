@@ -33,6 +33,18 @@ def _seed_jt(fake: Any, *, id_: int = 30, name: str = "deploy", **extra: Any) ->
     )
 
 
+def _seed_project(fake: Any, *, id_: int = 50, name: str = "playbooks", **extra: Any) -> None:
+    fake.seed(
+        "projects",
+        id=id_,
+        name=name,
+        organization=1,
+        organization_name="Default",
+        scm_type="git",
+        **extra,
+    )
+
+
 def _patches(fake: Any) -> list[Any]:
     return [c for c in fake.router.calls if c.request.method == "PATCH"]
 
@@ -202,6 +214,55 @@ def test_apply_stdin_consumes_pipe_envelope(seeded_default_org: Any) -> None:
     )
     assert result.exit_code == 0, result.output
     assert seeded_default_org.get_record("job_templates", 30)["verbosity"] == 9
+
+
+def test_apply_stdin_project_default_environment_fk(seeded_default_org: Any) -> None:
+    """Regression: ``projects apply --stdin --set default_environment=<ee>`` —
+    the EE name resolves to an id and lands in the sparse PATCH. Was rejected as
+    an unknown field because ``default_environment`` was absent from the spec."""
+    _seed_project(seeded_default_org, default_environment=None)
+    seeded_default_org.seed("execution_environments", id=9, name="prod-ee")
+    result = CliInvoker().invoke(
+        app,
+        [
+            "projects",
+            "apply",
+            "--stdin",
+            "--set",
+            "default_environment=prod-ee",
+            "--yes",
+            "--organization",
+            "Default",
+        ],
+        input="playbooks\n",
+    )
+    assert result.exit_code == 0, result.output
+    patches = _patches(seeded_default_org)
+    assert len(patches) == 1
+    assert json.loads(patches[0].request.content) == {"default_environment": 9}  # name→id
+    assert seeded_default_org.get_record("projects", 50)["default_environment"] == 9
+
+
+def test_apply_stdin_project_default_environment_preview(seeded_default_org: Any) -> None:
+    """Preview (no ``--yes``) shows the ``default_environment`` diff, writes nothing."""
+    _seed_project(seeded_default_org, default_environment=None)
+    seeded_default_org.seed("execution_environments", id=9, name="prod-ee")
+    result = CliInvoker().invoke(
+        app,
+        [
+            "projects",
+            "apply",
+            "--stdin",
+            "--set",
+            "default_environment=prod-ee",
+            "--organization",
+            "Default",
+        ],
+        input="playbooks\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert _patches(seeded_default_org) == []
+    assert "default_environment" in (result.stderr or "")
 
 
 def test_apply_stdin_rejects_unknown_field(seeded_default_org: Any) -> None:

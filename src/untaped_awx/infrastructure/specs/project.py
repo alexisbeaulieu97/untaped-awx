@@ -23,6 +23,7 @@ PROJECT_SPEC = AwxResourceSpec(
         "scm_update_cache_timeout",
         "allow_override",
         "credential",
+        "default_environment",
         "organization",
         "local_path",
         "timeout",
@@ -47,6 +48,8 @@ PROJECT_SPEC = AwxResourceSpec(
     fk_refs=(
         FkRef(field="organization", kind="Organization"),
         FkRef(field="credential", kind="Credential", scope_field="organization"),
+        # The project's default execution environment (global, no org scope).
+        FkRef(field="default_environment", kind="ExecutionEnvironment"),
     ),
     actions=(ActionSpec(name="update", path="update", returns="job"),),
     list_columns=("id", "name", "status"),

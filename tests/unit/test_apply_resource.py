@@ -693,6 +693,41 @@ def test_apply_to_existing_rejects_read_only_kind() -> None:
     assert strategy.updated is None
 
 
+def test_apply_to_existing_resolves_default_environment_fk() -> None:
+    """Project's ``default_environment`` FK: name in the overlay, resolved id in
+    the sparse PATCH.
+
+    Regression — the field was missing from the Project spec, so
+    ``plan_payload`` silently dropped it (and the ``--stdin`` guard rejected it).
+    Mirrors :func:`test_fks_resolved_for_create` for the ``credential`` FK.
+    """
+    existing = {
+        "id": 42,
+        "name": "playbooks",
+        "organization": 1,
+        "default_environment": 5,
+    }
+    strategy = _StubStrategy(existing=existing)
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={
+            ("Organization", "Default"): 1,
+            ("ExecutionEnvironment", "prod-ee"): 9,
+        },
+        strategy=strategy,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"default_environment": "prod-ee"},
+    )
+    outcome = apply.apply_to_existing(resource, existing, write=True)
+    assert outcome.action == "updated"
+    assert strategy.updated is not None
+    _, patch_payload = strategy.updated
+    assert patch_payload == {"default_environment": 9}  # name→id, sparse PATCH
+
+
 # ── parallelism invariant: ApplyResource has no per-call attribute rebinds ──
 
 
