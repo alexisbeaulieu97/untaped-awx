@@ -73,10 +73,12 @@ def test_job_templates_list_table_honours_global_ui_collection_view(
         """
         ui:
           collection_view: list
-        awx:
-          base_url: https://aap.example.com
-          token: secret
-          api_prefix: /api/v2/
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
         """
     )
     get_settings.cache_clear()
@@ -98,10 +100,12 @@ def test_job_templates_list_raw_ignores_unknown_global_ui_theme(
         """
         ui:
           theme: missing
-        awx:
-          base_url: https://aap.example.com
-          token: secret
-          api_prefix: /api/v2/
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
         """
     )
     get_settings.cache_clear()
@@ -129,10 +133,12 @@ def test_job_templates_list_rejects_command_local_profile_flag(
     """
     aap_config.write_text(
         """
-        awx:
-          base_url: https://aap.example.com
-          token: default-token
-          api_prefix: /api/v2/
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: default-token
+              api_prefix: /api/v2/
         """
     )
     original = aap_config.read_text()
