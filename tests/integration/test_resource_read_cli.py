@@ -121,10 +121,10 @@ def test_job_templates_list_rejects_command_local_profile_flag(
     fake_aap: Any,
     aap_config: Path,
 ) -> None:
-    """Profile selection belongs to the untaped-profile plugin.
+    """Profile selection is built into the SDK.
 
     Factory-built commands do not expose a local ``--profile``, so
-    passing one directly to the plugin app is an unknown-option error
+    passing one directly to the tool app is an unknown-option error
     (exit 2), and the config file is left untouched.
     """
     aap_config.write_text(

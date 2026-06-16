@@ -1,6 +1,6 @@
 """Configuration struct for the AWX/AAP package.
 
-Decouples the package from the aggregate settings model. The plugin
+Decouples the package from the aggregate settings model. The tool
 registers this model as the ``awx`` section, and CLI composition roots
 pass it into the AWX adapters.
 """
