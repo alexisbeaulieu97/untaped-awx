@@ -21,7 +21,7 @@ Use this skill when the user wants an agent to operate the `untaped-awx` CLI for
 - Prefer `list --format raw --columns name` when selecting a resource for a follow-up command.
 - Use `--format pipe` to chain commands richly: it emits one self-describing record per line tagged with a `kind` (e.g. `awx.job-template`, `awx.job`), and any `--stdin` consumer reads that stream back (e.g. `job-templates list --format pipe | job-templates get --stdin`).
 - Use `get --format yaml` or `save` when the next step is editing an AWX object declaratively.
-- Apply workflows preview by default; writes require `--yes`.
+- Apply workflows preview by default; writes require `--yes`. Fields you provide are passed through to AWX as-is (so version-specific fields work without a tool update); identity, read-only, and membership fields are handled automatically, and an unrecognized field is sent with a `warning:` rather than rejected.
 - `delete` is a guarded batch verb: it previews the targets on stderr and confirms before deleting. On a TTY it prompts; reading targets from a pipe (e.g. `inventories list --filter name__contains=test --format pipe | inventories delete --stdin --yes`) requires `--yes` because stdin is the data, not a prompt. Use `--dry-run` to preview the set (rows go to stdout) without deleting. Deleted ids lead each row, so `--format raw` pipes them onward.
 - `--profile <name>` works in any token position (e.g. `untaped-awx --profile prod ping`).
 

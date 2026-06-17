@@ -10,6 +10,23 @@ from __future__ import annotations
 from untaped_awx.domain import FkRef
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 
+UNIVERSAL_READ_ONLY: tuple[str, ...] = (
+    "id",
+    "url",
+    "type",
+    "related",
+    "summary_fields",
+    "created",
+    "modified",
+)
+"""AWX's server-managed fields present on every resource.
+
+Under the passthrough apply model (``ApplyPlanner.plan_payload``) read-only
+stripping is load-bearing — it's what keeps a stray ``id``/``summary_fields``
+(e.g. from a get-export) out of a PATCH. Every mutable spec must declare at
+least these; ``test_catalog`` pins that invariant.
+"""
+
 ORGANIZATION_SPEC = AwxResourceSpec(
     kind="Organization",
     cli_name="organizations",

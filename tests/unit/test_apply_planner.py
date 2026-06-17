@@ -92,12 +92,15 @@ def test_plan_identity_includes_parent_when_present() -> None:
 # ---- plan_payload ----
 
 
-def test_plan_payload_projects_canonical_fields() -> None:
+def test_plan_payload_passes_through_unknown_fields() -> None:
+    """Passthrough model: a field not in ``canonical_fields`` is sent as-is
+    (version-robust — new AWX fields work without a spec change). Previously
+    such a field was silently dropped by the closed allowlist."""
     planner = ApplyPlanner()
     resource = Resource(
         kind="Project",
         metadata=Metadata(name="playbooks", organization="Default"),
-        spec={"scm_type": "git", "scm_url": "https://example.com", "ignored": "junk"},
+        spec={"scm_type": "git", "scm_url": "https://example.com", "future_field": "x"},
     )
     payload = planner.plan_payload(
         PROJECT_SPEC,
@@ -106,7 +109,81 @@ def test_plan_payload_projects_canonical_fields() -> None:
     )
     assert payload["scm_type"] == "git"
     assert payload["scm_url"] == "https://example.com"
-    assert "ignored" not in payload  # not in canonical_fields
+    assert payload["future_field"] == "x"  # passed through, not dropped
+
+
+def test_plan_payload_strips_read_only_fields() -> None:
+    """Server-managed read-only fields (e.g. left over from a get-export) are
+    never sent back — passthrough must still drop them."""
+    planner = ApplyPlanner()
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"scm_type": "git", "id": 42, "summary_fields": {"x": 1}},
+    )
+    payload = planner.plan_payload(
+        PROJECT_SPEC,
+        resource,
+        fk=cast(FkResolver, _StubFk({("Organization", "Default"): 1})),
+    )
+    assert payload["scm_type"] == "git"
+    assert "id" not in payload
+    assert "summary_fields" not in payload
+
+
+def test_plan_payload_spec_name_does_not_override_metadata() -> None:
+    """Identity is metadata's job — a stray ``spec.name`` must not override
+    ``metadata.name`` (envelope contract)."""
+    planner = ApplyPlanner()
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"scm_type": "git", "name": "evil-rename"},
+    )
+    payload = planner.plan_payload(
+        PROJECT_SPEC,
+        resource,
+        fk=cast(FkResolver, _StubFk({("Organization", "Default"): 1})),
+    )
+    assert payload["name"] == "playbooks"
+
+
+def test_plan_payload_organization_comes_from_metadata_not_spec() -> None:
+    """``organization`` is an identity key — sourced from metadata and
+    FK-resolved, even if a (stale) value rides along in the spec body."""
+    planner = ApplyPlanner()
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"scm_type": "git", "organization": "StaleOrg"},
+    )
+    payload = planner.plan_payload(
+        PROJECT_SPEC,
+        resource,
+        fk=cast(FkResolver, _StubFk({("Organization", "Default"): 1})),
+    )
+    assert payload["organization"] == 1  # metadata's "Default" → 1, not "StaleOrg"
+
+
+def test_plan_payload_drops_polymorphic_parent_from_spec() -> None:
+    """A polymorphic FK field (Schedule ``parent``) accidentally present in
+    the spec body must not leak into the payload — it lives on metadata."""
+    planner = ApplyPlanner()
+    resource = Resource(
+        kind="Schedule",
+        metadata=Metadata(
+            name="nightly",
+            parent=IdentityRef(kind="JobTemplate", name="deploy", organization="Default"),
+        ),
+        spec={"rrule": "FREQ=DAILY", "parent": {"kind": "JobTemplate", "name": "x"}},
+    )
+    payload = planner.plan_payload(
+        SCHEDULE_SPEC,
+        resource,
+        fk=cast(FkResolver, _StubFk({})),
+    )
+    assert "parent" not in payload
+    assert payload["rrule"] == "FREQ=DAILY"
 
 
 def test_plan_payload_injects_identity_keys_from_metadata() -> None:

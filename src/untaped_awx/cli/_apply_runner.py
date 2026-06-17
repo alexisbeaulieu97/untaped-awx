@@ -11,7 +11,6 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from untaped.api import (
-    ConfigError,
     OutputFormat,
     clamp_parallel,
     echo,
@@ -24,6 +23,7 @@ from untaped.errors import UntapedError
 
 from untaped_awx.application import ApplyFile, ApplyResource, GetResource
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP
+from untaped_awx.application.apply_planner import unrecognized_fields
 from untaped_awx.application.ports import ResourceDocumentReader
 from untaped_awx.cli._context import AwxContext, scope_for_command
 from untaped_awx.cli._overlay import build_overlay
@@ -89,10 +89,15 @@ def run_apply_stdin(
     ``write`` (``--yes``) issues the sparse PATCH. Writes to stdout/stderr.
     """
     overlay = build_overlay(set_pairs, patch_file)
-    settable = set(spec.canonical_fields) | set(spec.identity_keys)
-    unknown = sorted(field for field in overlay if field not in settable)
+    unknown = unrecognized_fields(spec, overlay)
     if unknown:
-        raise ConfigError(f"unknown field(s) for {spec.kind}: {', '.join(unknown)}")
+        # Passthrough model: send the field(s) anyway (version-robust), but warn
+        # once over the shared overlay so a typo / unknown field stays visible.
+        echo(
+            f"warning: {spec.kind}: field(s) sent as-is (not in this tool's known schema): "
+            + ", ".join(unknown),
+            err=True,
+        )
 
     ids = read_identifiers([], stdin=True, id_field=id_field_for(spec, by_id=by_id))
     scope = scope_for_command(

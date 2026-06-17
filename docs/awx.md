@@ -212,6 +212,13 @@ field-level; declared secret paths (`inputs.*`, `webhook_key`)
 carrying `$encrypted$` are stripped from the PATCH and shown as
 `(preserved existing secret)` rows.
 
+The fields you provide are **passed through to AWX as-is**, so a field your
+AWX version accepts works without waiting for a tool update. Read-only /
+server-managed fields and identity (`name`, `organization`, `parent`) are
+handled automatically, foreign keys still resolve by name, and any field
+this tool has no metadata for is sent with a `warning:` so a typo stays
+visible rather than silently no-op'ing on the server.
+
 `apply --stdin` mass-patches a piped *selection* instead of a file:
 pipe a `list` into it, overlay the fields to change with `--set
 NAME=VALUE` (repeatable, JSON-coerced — `verbosity=2` → `2`,

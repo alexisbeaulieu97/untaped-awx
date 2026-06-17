@@ -16,10 +16,30 @@ the apply path actually queries.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from untaped_awx.application.ports import FkResolver
 from untaped_awx.domain import FkRef, Resource, ResourceSpec
+
+
+def unrecognized_fields(spec: ResourceSpec, names: Iterable[str]) -> list[str]:
+    """Names not part of ``spec``'s known schema, sorted.
+
+    "Known" is the union of ``canonical_fields``, ``identity_keys``, the
+    ``fk_refs`` field names, and ``read_only_fields``. Under the passthrough
+    payload model these fields are still *sent* (minus the
+    :meth:`ApplyPlanner.plan_payload` drop-set), but the caller warns about them
+    so a hand-typed typo or a field this tool has no metadata for stays visible
+    rather than silently no-op'ing on the server.
+    """
+    recognized = (
+        set(spec.canonical_fields)
+        | set(spec.identity_keys)
+        | {ref.field for ref in spec.fk_refs}
+        | set(spec.read_only_fields)
+    )
+    return sorted(name for name in names if name not in recognized)
 
 
 class ApplyPlanner:
@@ -41,18 +61,32 @@ class ApplyPlanner:
     def plan_payload(
         self, spec: ResourceSpec, resource: Resource, *, fk: FkResolver
     ) -> dict[str, Any]:
-        """Project ``resource.spec`` onto ``spec.canonical_fields`` and resolve FKs."""
-        body: dict[str, Any] = {}
+        """Pass ``resource.spec`` through (minus a drop-set) and resolve FKs.
+
+        Passthrough rather than a closed ``canonical_fields`` allowlist, so
+        fields a given AWX version accepts work without a spec change. The
+        drop-set excludes fields that must never be PATCHed straight from the
+        spec body:
+
+        - ``read_only_fields`` — server-managed (e.g. left over in a get-export);
+        - ``identity_keys`` — identity lives in ``metadata``, never the spec, so
+          a stray ``spec.name``/``spec.organization`` can't override it;
+        - polymorphic FK fields (e.g. Schedule ``parent``) — carried on metadata;
+        - ``sub_endpoint`` multi-FKs (e.g. Group ``hosts``) — reconciled
+          out-of-band via associate/disassociate POSTs, not the body.
+        """
         raw = resource.spec
-        for field in spec.canonical_fields:
-            if field in raw:
-                body[field] = raw[field]
+        drop = (
+            set(spec.read_only_fields)
+            | set(spec.identity_keys)
+            | {ref.field for ref in spec.fk_refs if ref.polymorphic}
+            | {ref.field for ref in spec.fk_refs if ref.multi and ref.sub_endpoint is not None}
+        )
+        body: dict[str, Any] = {field: value for field, value in raw.items() if field not in drop}
         # Inject identity keys from metadata so create payloads include
-        # ``name`` (and ``organization`` for org-scoped kinds) even when
-        # absent from spec.
+        # ``name`` (and ``organization`` for org-scoped kinds), and identity is
+        # always metadata-sourced (never overridable by the spec body).
         for key in spec.identity_keys:
-            if key in body:
-                continue
             value = getattr(resource.metadata, key, None)
             if value is not None:
                 body[key] = value

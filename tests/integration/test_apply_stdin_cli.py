@@ -265,7 +265,11 @@ def test_apply_stdin_project_default_environment_preview(seeded_default_org: Any
     assert "default_environment" in (result.stderr or "")
 
 
-def test_apply_stdin_rejects_unknown_field(seeded_default_org: Any) -> None:
+def test_apply_stdin_warns_and_passes_through_unknown_field(seeded_default_org: Any) -> None:
+    """Passthrough model: a field this tool doesn't recognize is sent to AWX
+    as-is, with a soft warning (was a hard exit-2 rejection under the old
+    closed allowlist). NOTE: the fake server blindly stores the body, so this
+    proves the CLI *sends* the field — not that a real AWX accepts it."""
     _seed_jt(seeded_default_org)
     result = CliInvoker().invoke(
         app,
@@ -281,6 +285,8 @@ def test_apply_stdin_rejects_unknown_field(seeded_default_org: Any) -> None:
         ],
         input="deploy\n",
     )
-    assert result.exit_code == 1
-    assert "zzz_bogus" in (result.stderr or result.output)
-    assert _patches(seeded_default_org) == []
+    assert result.exit_code == 0, result.output
+    assert "zzz_bogus" in (result.stderr or "")  # warned, not rejected
+    patches = _patches(seeded_default_org)
+    assert len(patches) == 1
+    assert json.loads(patches[0].request.content) == {"zzz_bogus": 1}  # passed through
