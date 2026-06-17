@@ -728,6 +728,51 @@ def test_apply_to_existing_resolves_default_environment_fk() -> None:
     assert patch_payload == {"default_environment": 9}  # name→id, sparse PATCH
 
 
+def test_apply_warns_on_unrecognized_field_but_passes_it_through() -> None:
+    """File-mode apply (``__call__``) sends an unknown field through to AWX
+    (passthrough, version-robust) but warns once so it stays discoverable."""
+    existing = {"id": 42, "name": "playbooks", "organization": 1, "scm_type": "git"}
+    strategy = _StubStrategy(existing=existing)
+    warnings: list[str] = []
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        warn=warnings,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"scm_type": "git", "future_field": "x"},
+    )
+    apply(resource, write=True)
+    assert any("future_field" in w for w in warnings)
+    assert strategy.updated is not None
+    _, patch_payload = strategy.updated
+    assert patch_payload == {"future_field": "x"}  # passed through, sparse
+
+
+def test_apply_does_not_warn_on_known_or_handled_fields() -> None:
+    """Canonical, identity, FK and read-only fields are recognized — no warning
+    (a round-tripped ``spec.organization`` / read-only ``id`` must not nag)."""
+    existing = {"id": 42, "name": "playbooks", "organization": 1, "scm_type": "git"}
+    strategy = _StubStrategy(existing=existing)
+    warnings: list[str] = []
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        warn=warnings,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"scm_type": "git", "organization": "Default", "id": 42},
+    )
+    apply(resource, write=True)
+    assert warnings == []
+
+
 # ── parallelism invariant: ApplyResource has no per-call attribute rebinds ──
 
 

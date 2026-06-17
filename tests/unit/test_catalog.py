@@ -4,7 +4,7 @@ import pytest
 
 from untaped_awx.errors import AwxApiError
 from untaped_awx.infrastructure import AwxResourceCatalog
-from untaped_awx.infrastructure.specs import ALL_SPECS
+from untaped_awx.infrastructure.specs import ALL_SPECS, UNIVERSAL_READ_ONLY
 
 
 def test_lookup_by_kind() -> None:
@@ -140,3 +140,20 @@ def test_saveable_list_columns_are_domain_known_filter_fields() -> None:
         )
 
     assert not missing
+
+
+def test_mutable_specs_declare_universal_read_only_fields() -> None:
+    """Read-only stripping in ``ApplyPlanner.plan_payload`` is the safety net
+    under the passthrough model: every mutable spec must declare the
+    server-managed ``UNIVERSAL_READ_ONLY`` fields so they're never PATCHed back
+    (e.g. a stray ``id``/``summary_fields`` from a get-export)."""
+    missing: list[str] = []
+    for spec in ALL_SPECS:
+        if spec.fidelity == "read_only":
+            continue
+        declared = set(spec.read_only_fields)
+        missing.extend(
+            f"{spec.kind}.{field}" for field in UNIVERSAL_READ_ONLY if field not in declared
+        )
+
+    assert not missing, f"mutable specs missing universal read-only fields: {missing}"

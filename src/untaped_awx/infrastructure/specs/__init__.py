@@ -15,6 +15,7 @@ from untaped_awx.infrastructure.specs._support import (
     INVENTORY_SPEC,
     LABEL_SPEC,
     ORGANIZATION_SPEC,
+    UNIVERSAL_READ_ONLY,
 )
 from untaped_awx.infrastructure.specs.credential import CREDENTIAL_SPEC
 from untaped_awx.infrastructure.specs.group import GROUP_SPEC
@@ -57,5 +58,6 @@ __all__ = [
     "ORGANIZATION_SPEC",
     "PROJECT_SPEC",
     "SCHEDULE_SPEC",
+    "UNIVERSAL_READ_ONLY",
     "WORKFLOW_JOB_TEMPLATE_SPEC",
 ]

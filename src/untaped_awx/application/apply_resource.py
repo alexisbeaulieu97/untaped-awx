@@ -15,7 +15,7 @@ from typing import Any
 from untaped_awx.application._secret_paths import strip_encrypted_in_place
 from untaped_awx.application.apply_field_diff import PRESERVED_SECRET_NOTE, FieldDiff
 from untaped_awx.application.apply_membership import MembershipPlan, MembershipReconciler
-from untaped_awx.application.apply_planner import ApplyPlanner
+from untaped_awx.application.apply_planner import ApplyPlanner, unrecognized_fields
 from untaped_awx.application.apply_secret_policy import SecretPreservationPolicy
 from untaped_awx.application.ports import (
     ApplyStrategy,
@@ -81,6 +81,7 @@ class ApplyResource:
         to drive the deferred writes against now-existing siblings.
         """
         spec, identity, payload, strategy = self._prepare(resource)
+        self._warn_unrecognized(spec, resource)
         existing = strategy.find_existing(spec, identity, client=self._client, fk=self._fk)
         return self._dispatch(
             spec=spec,
@@ -122,6 +123,21 @@ class ApplyResource:
             write=write,
             defer_memberships=defer_memberships,
         )
+
+    def _warn_unrecognized(self, spec: ResourceSpec, resource: Resource) -> None:
+        """Warn once (file-mode, per doc) about fields not in ``spec``'s schema.
+
+        Passthrough still sends them; this only keeps them visible. The
+        ``apply --stdin`` seam (:meth:`apply_to_existing`) deliberately does not
+        call this — its caller warns once over the shared overlay instead of
+        once per resolved item.
+        """
+        unknown = unrecognized_fields(spec, resource.spec.keys())
+        if unknown:
+            self._warn(
+                f"{spec.kind}: field(s) sent as-is (not in this tool's known schema): "
+                + ", ".join(unknown)
+            )
 
     def _prepare(
         self, resource: Resource

@@ -158,11 +158,19 @@ inventory-parent both ride on the same `metadata.parent: IdentityRef` slot.
 across four collaborators it composes:
 
 - **`ApplyPlanner`** (`apply_planner.py`) — `plan_identity` and
-  `plan_payload`. Projects `resource.spec` to `canonical_fields` and
-  resolves FK names to ids; sub-endpoint multi-FKs are stripped from
-  the body (the membership reconciler handles them). Also exposes the
-  pure `scope_for(ref, resource)` helper shared with `apply_file`'s
-  prefetch path.
+  `plan_payload`. **Passes `resource.spec` through** (so a field a given
+  AWX version accepts works without a spec change — not a closed
+  `canonical_fields` allowlist), minus a drop-set: `read_only_fields`
+  (server-managed), identity keys (sourced from metadata, never the spec
+  body), polymorphic FKs (e.g. Schedule `parent`, carried on metadata), and
+  sub-endpoint multi-FKs (e.g. Group `hosts`, handled by the membership
+  reconciler). It then injects identity from metadata and resolves FK names
+  to ids. Fields outside the spec's known schema (`unrecognized_fields`) are
+  still sent, but the caller warns (`ApplyResource.__call__` per doc;
+  `run_apply_stdin` once per overlay). `canonical_fields` now serves as the
+  "known field" hint (drives that warning + `save` export), not a write gate.
+  Also exposes the pure `scope_for(ref, resource)` helper shared with
+  `apply_file`'s prefetch path.
 - **`SecretPreservationPolicy`** (`apply_secret_policy.py`) — second-pass
   secret handling. After `_secret_paths.strip_encrypted_in_place`
   removes `$encrypted$` placeholders, the policy decides which top-level fields
