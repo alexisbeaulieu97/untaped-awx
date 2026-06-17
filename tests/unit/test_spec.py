@@ -46,6 +46,14 @@ def test_polymorphic_fk_ref() -> None:
     assert fk.kind is None  # polymorphic FKs don't fix a single kind
 
 
+def test_non_polymorphic_fk_ref_requires_kind() -> None:
+    """A non-polymorphic FK with no ``kind`` is rejected at construction — this
+    is what lets ``ApplyPlanner.plan_payload`` assert ``ref.kind is not None``
+    for every ref that survives its drop-set."""
+    with pytest.raises(ValidationError):
+        FkRef(field="project")
+
+
 def test_action_spec_accepts_set_is_frozen() -> None:
     a = ActionSpec(
         name="launch",

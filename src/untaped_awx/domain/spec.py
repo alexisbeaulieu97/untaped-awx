@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 Fidelity = Literal["full", "partial", "read_only"]
 """Restore-fidelity tier per kind, surfaced on save."""
@@ -53,6 +53,18 @@ class FkRef(BaseModel):
 
     scope_field_in_value: str | None = None
     """For polymorphic FKs, the key inside the value that holds the scope."""
+
+    @model_validator(mode="after")
+    def _kind_required_unless_polymorphic(self) -> FkRef:
+        """A non-polymorphic FK must name its ``kind``.
+
+        Makes ``ApplyPlanner.plan_payload``'s ``assert ref.kind is not None``
+        correct by construction: only polymorphic refs (resolved out-of-band,
+        never reaching that assert) may omit ``kind``.
+        """
+        if self.kind is None and not self.polymorphic:
+            raise ValueError("FkRef.kind is required unless the FK is polymorphic")
+        return self
 
 
 class ActionSpec(BaseModel):
