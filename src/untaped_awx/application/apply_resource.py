@@ -15,7 +15,7 @@ from typing import Any
 from untaped_awx.application._secret_paths import strip_encrypted_in_place
 from untaped_awx.application.apply_field_diff import PRESERVED_SECRET_NOTE, FieldDiff
 from untaped_awx.application.apply_membership import MembershipPlan, MembershipReconciler
-from untaped_awx.application.apply_planner import ApplyPlanner, unrecognized_fields
+from untaped_awx.application.apply_planner import ApplyPlanner, unrecognized_warning
 from untaped_awx.application.apply_secret_policy import SecretPreservationPolicy
 from untaped_awx.application.ports import (
     ApplyStrategy,
@@ -132,12 +132,9 @@ class ApplyResource:
         call this — its caller warns once over the shared overlay instead of
         once per resolved item.
         """
-        unknown = unrecognized_fields(spec, resource.spec.keys())
-        if unknown:
-            self._warn(
-                f"{spec.kind}: field(s) sent as-is (not in this tool's known schema): "
-                + ", ".join(unknown)
-            )
+        message = unrecognized_warning(spec, resource.spec.keys())
+        if message is not None:
+            self._warn(message)
 
     def _prepare(
         self, resource: Resource

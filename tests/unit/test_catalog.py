@@ -127,16 +127,10 @@ def test_saveable_list_columns_are_domain_known_filter_fields() -> None:
     for spec in ALL_SPECS:
         if spec.fidelity == "read_only":
             continue
-        known_fields = (
-            set(spec.canonical_fields)
-            | set(spec.identity_keys)
-            | set(spec.read_only_fields)
-            | {fk.field for fk in spec.fk_refs}
-        )
         missing.extend(
             f"{spec.kind}.{column}"
             for column in spec.list_columns
-            if column.split("__", 1)[0] not in known_fields
+            if column.split("__", 1)[0] not in spec.known_fields
         )
 
     assert not missing

@@ -76,6 +76,15 @@ class ResourceSpec(BaseModel):
     kind: str
     identity_keys: tuple[str, ...]
     canonical_fields: tuple[str, ...]
+    """Fields the tool curates for a kind.
+
+    For ``save`` this is a strict export allowlist — only these are written to
+    the saved YAML, keeping it portable. For ``apply`` it is **advisory**: the
+    payload is passthrough (see ``ApplyPlanner.plan_payload``) and
+    ``canonical_fields`` only feeds :attr:`known_fields` (which decides whether
+    an apply field is warned about as unrecognized) — it is no longer a write
+    gate.
+    """
     read_only_fields: tuple[str, ...] = ()
     fk_refs: tuple[FkRef, ...] = ()
     launch_fk_refs: tuple[FkRef, ...] = ()
@@ -93,3 +102,20 @@ class ResourceSpec(BaseModel):
     infrastructure adapter) maps it to a concrete :class:`ApplyStrategy`."""
     fidelity: Fidelity = "full"
     fidelity_note: str | None = None
+
+    @property
+    def known_fields(self) -> frozenset[str]:
+        """Every field this spec has metadata for.
+
+        The union of ``canonical_fields``, ``identity_keys``, the ``fk_refs``
+        field names, and ``read_only_fields`` — the single source of truth for
+        "does this tool recognize this field?" Consumed by the apply
+        unrecognized-field warning, bulk-save filter validation, and the
+        catalog list-column invariant.
+        """
+        return (
+            frozenset(self.canonical_fields)
+            | frozenset(self.identity_keys)
+            | {ref.field for ref in self.fk_refs}
+            | frozenset(self.read_only_fields)
+        )

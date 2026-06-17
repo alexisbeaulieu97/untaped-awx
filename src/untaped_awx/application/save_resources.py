@@ -86,7 +86,7 @@ class SaveResources:
 
 def _filter_field_not_on_spec(filters: dict[str, str], spec: ResourceSpec) -> str | None:
     """Return a filter field that is not represented in the domain spec."""
-    fields = _filterable_fields(spec)
+    fields = spec.known_fields
     for key in filters:
         base = key.split("__", 1)[0]
         if base not in fields:
@@ -111,21 +111,12 @@ def _organization_filter_for_spec(spec: ResourceSpec, organization: str) -> dict
     """Return the safest server-side org filter for a bulk-save kind."""
     if spec.kind == "Schedule":
         return {}
-    fields = _filterable_fields(spec)
+    fields = spec.known_fields
     if "organization" in fields:
         return {"organization__name": organization}
     if "inventory" in fields:
         return {"inventory__organization__name": organization}
     return {}
-
-
-def _filterable_fields(spec: ResourceSpec) -> set[str]:
-    return (
-        set(spec.canonical_fields)
-        | set(spec.identity_keys)
-        | set(spec.read_only_fields)
-        | {fk.field for fk in spec.fk_refs}
-    )
 
 
 def _metadata_matches_org(metadata: Metadata, organization: str) -> bool:
