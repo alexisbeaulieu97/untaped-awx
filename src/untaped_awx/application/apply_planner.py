@@ -24,22 +24,30 @@ from untaped_awx.domain import FkRef, Resource, ResourceSpec
 
 
 def unrecognized_fields(spec: ResourceSpec, names: Iterable[str]) -> list[str]:
-    """Names not part of ``spec``'s known schema, sorted.
+    """Names not part of ``spec``'s known schema (:attr:`ResourceSpec.known_fields`), sorted.
 
-    "Known" is the union of ``canonical_fields``, ``identity_keys``, the
-    ``fk_refs`` field names, and ``read_only_fields``. Under the passthrough
-    payload model these fields are still *sent* (minus the
+    Under the passthrough payload model these fields are still *sent* (minus the
     :meth:`ApplyPlanner.plan_payload` drop-set), but the caller warns about them
     so a hand-typed typo or a field this tool has no metadata for stays visible
     rather than silently no-op'ing on the server.
     """
-    recognized = (
-        set(spec.canonical_fields)
-        | set(spec.identity_keys)
-        | {ref.field for ref in spec.fk_refs}
-        | set(spec.read_only_fields)
+    return sorted(name for name in names if name not in spec.known_fields)
+
+
+def unrecognized_warning(spec: ResourceSpec, names: Iterable[str]) -> str | None:
+    """The shared "field(s) sent as-is" warning body, or ``None`` if all known.
+
+    One source of truth for the message that both the file-mode
+    (:meth:`ApplyResource._warn_unrecognized`, per doc) and ``--stdin``
+    (:func:`run_apply_stdin`, once per overlay) paths emit. Callers add their own
+    ``warning:`` prefix / routing.
+    """
+    unknown = unrecognized_fields(spec, names)
+    if not unknown:
+        return None
+    return f"{spec.kind}: field(s) sent as-is (not in this tool's known schema): " + ", ".join(
+        unknown
     )
-    return sorted(name for name in names if name not in recognized)
 
 
 class ApplyPlanner:
@@ -76,12 +84,14 @@ class ApplyPlanner:
           out-of-band via associate/disassociate POSTs, not the body.
         """
         raw = resource.spec
-        drop = (
-            set(spec.read_only_fields)
-            | set(spec.identity_keys)
-            | {ref.field for ref in spec.fk_refs if ref.polymorphic}
-            | {ref.field for ref in spec.fk_refs if ref.multi and ref.sub_endpoint is not None}
-        )
+        # FK fields handled out-of-band (polymorphic ⇒ metadata; sub_endpoint
+        # multi ⇒ membership reconciler) must never be PATCHed from the body.
+        out_of_band_fks = {
+            ref.field
+            for ref in spec.fk_refs
+            if ref.polymorphic or (ref.multi and ref.sub_endpoint is not None)
+        }
+        drop = set(spec.read_only_fields) | set(spec.identity_keys) | out_of_band_fks
         body: dict[str, Any] = {field: value for field, value in raw.items() if field not in drop}
         # Inject identity keys from metadata so create payloads include
         # ``name`` (and ``organization`` for org-scoped kinds), and identity is
@@ -90,16 +100,11 @@ class ApplyPlanner:
             value = getattr(resource.metadata, key, None)
             if value is not None:
                 body[key] = value
-        # Resolve FKs (skip polymorphic — those live in metadata, not
-        # payload — and skip sub_endpoint multi-FKs, which are managed
-        # out-of-band via associate / disassociate POSTs against
-        # ``/<api_path>/<id>/<sub>/``).
+        # Resolve the FK names that survived the drop-set. Polymorphic and
+        # sub_endpoint multi-FKs were excluded above, so every ref reaching here
+        # has a concrete ``kind`` and belongs in the body.
         for ref in spec.fk_refs:
-            if ref.polymorphic or ref.field not in body or body[ref.field] is None:
-                continue
-            if ref.multi and ref.sub_endpoint is not None:
-                # Membership goes through the reconciler; never PATCH it.
-                body.pop(ref.field, None)
+            if ref.field not in body or body[ref.field] is None:
                 continue
             assert ref.kind is not None
             scope = scope_for(ref, resource)

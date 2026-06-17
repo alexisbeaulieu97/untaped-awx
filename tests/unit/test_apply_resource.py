@@ -752,6 +752,28 @@ def test_apply_warns_on_unrecognized_field_but_passes_it_through() -> None:
     assert patch_payload == {"future_field": "x"}  # passed through, sparse
 
 
+def test_apply_to_existing_does_not_warn_on_unrecognized_field() -> None:
+    """The ``--stdin`` per-item seam stays silent: ``run_apply_stdin`` warns once
+    over the shared overlay, so ``apply_to_existing`` must NOT warn per item
+    (else an N-item mass-patch would repeat the warning N times)."""
+    existing = {"id": 42, "name": "playbooks", "organization": 1, "scm_type": "git"}
+    strategy = _StubStrategy(existing=existing)
+    warnings: list[str] = []
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        warn=warnings,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"future_field": "x"},
+    )
+    apply.apply_to_existing(resource, existing, write=True)
+    assert warnings == []
+
+
 def test_apply_does_not_warn_on_known_or_handled_fields() -> None:
     """Canonical, identity, FK and read-only fields are recognized — no warning
     (a round-tripped ``spec.organization`` / read-only ``id`` must not nag)."""
