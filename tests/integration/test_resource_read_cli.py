@@ -71,10 +71,10 @@ def test_job_templates_list_table_honours_global_ui_collection_view(
 ) -> None:
     aap_config.write_text(
         """
-        ui:
-          collection_view: list
         profiles:
           default:
+            ui:
+              collection_view: list
             awx:
               base_url: https://aap.example.com
               token: secret
@@ -98,10 +98,10 @@ def test_job_templates_list_raw_ignores_unknown_global_ui_theme(
 ) -> None:
     aap_config.write_text(
         """
-        ui:
-          theme: missing
         profiles:
           default:
+            ui:
+              theme: missing
             awx:
               base_url: https://aap.example.com
               token: secret
