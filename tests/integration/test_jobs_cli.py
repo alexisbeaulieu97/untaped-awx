@@ -82,10 +82,10 @@ def test_jobs_list_table_honours_global_ui_collection_view(
 ) -> None:
     aap_config.write_text(
         """
-        ui:
-          collection_view: list
         profiles:
           default:
+            ui:
+              collection_view: list
             awx:
               base_url: https://aap.example.com
               token: secret

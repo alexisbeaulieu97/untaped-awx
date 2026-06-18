@@ -68,10 +68,10 @@ def test_ping_table_honours_global_ui_collection_view(
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
-        ui:
-          collection_view: list
         profiles:
           default:
+            ui:
+              collection_view: list
             awx:
               base_url: https://aap.example.com
               token: secret
