@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -61,17 +62,18 @@ def test_ping_uses_configured_api_prefix(
     assert result.stdout.strip() == "4.5.0"
 
 
-def test_ping_table_honours_global_ui_collection_view(
+def test_ping_table_renders_detail_view(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A single entity renders as a vertical key:value detail view under the
+    default config — not a boxed one-row table (the ``emit`` single-record
+    contract). Before the migration this default-config render was a grid."""
     cfg = tmp_path / "config.yml"
     cfg.write_text(
         """
         profiles:
           default:
-            ui:
-              collection_view: list
             awx:
               base_url: https://aap.example.com
               token: secret
@@ -94,6 +96,37 @@ def test_ping_table_honours_global_ui_collection_view(
     assert "version: 4.5.0" in result.stdout
     assert "active_node: controller-1" in result.stdout
     assert not any(ch in result.stdout for ch in "╭╮╰╯┌┐└┘│─")
+
+
+def test_ping_json_emits_bare_object(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``ping --format json`` emits a bare object ``{…}`` (not ``[{…}]``)."""
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(
+        """
+        profiles:
+          default:
+            awx:
+              base_url: https://aap.example.com
+              token: secret
+              api_prefix: /api/v2/
+        """
+    )
+    monkeypatch.setenv("UNTAPED_CONFIG", str(cfg))
+    get_settings.cache_clear()
+
+    with respx.mock(base_url="https://aap.example.com") as mock:
+        mock.get("/api/v2/ping/").mock(
+            return_value=httpx.Response(200, json={"version": "4.5.0", "active_node": "c-1"})
+        )
+        result = CliInvoker().invoke(app, ["ping", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, dict)
+    assert payload["version"] == "4.5.0"
 
 
 def test_ping_rejects_command_local_profile_flag(

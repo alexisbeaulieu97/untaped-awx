@@ -29,5 +29,6 @@ Use this skill when the user wants an agent to operate the `untaped-awx` CLI for
 
 - Keep stdout data-only in shell pipelines; status and warnings are on stderr.
 - For automation, prefer `--format json` or `--format yaml`.
+- Single-entity commands (`ping`, `save`, `<kind> update`) render a vertical detail view under `--format table` and a bare JSON object (`{…}`, not a one-element `[{…}]`) under `--format json`; collection commands (`apply`, `launch`, `jobs list`, `jobs events`/`logs`) render tables and JSON arrays.
 - For human inspection, table output is fine, but do not parse it.
 - Do not reveal secret fields. `$encrypted$` placeholders in saved specs mean preserve existing AWX secrets.

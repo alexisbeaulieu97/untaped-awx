@@ -202,9 +202,10 @@ instances that share resource names.
 
 `save` accepts `--format yaml|json|raw|pipe` (default `yaml`). The yaml
 path emits a bare envelope so the output pipes straight into `apply`;
-`--format json` returns the envelope inside a one-element list (same
-shape as every other `--format json` command in the suite), and
-`--format raw` emits the resource kind on a single line.
+`--format json` emits the envelope as a bare object `{…}` (single-entity
+commands like `save`, `ping`, and `<kind> update` render one object, while
+collection commands like `apply`, `launch`, and `jobs list` render a JSON
+array), and `--format raw` emits the resource kind on a single line.
 
 `apply` is **preview by default** — it prints what *would* change and
 exits without writing. Pass `--yes` to actually write. The diff is

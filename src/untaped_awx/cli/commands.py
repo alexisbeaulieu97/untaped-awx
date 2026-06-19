@@ -13,13 +13,14 @@ from typing import Annotated
 
 from cyclopts import Parameter, validators
 from rich.console import Console
-from untaped import (
+from untaped.api import (
     ColumnsOption,
     ConfigError,
     FormatOption,
     OutputFormat,
     create_app,
     echo,
+    emit,
     get_config_section,
     get_core_settings,
     parse_kv_pairs,
@@ -73,7 +74,7 @@ def ping_command(
         config = get_config_section("awx", AwxConfig)
         with AwxClient(config, http=settings.http) as client:
             status = Ping(client)()
-        echo(render_rows([status.model_dump()], fmt=fmt, columns=columns, kind="awx.status"))
+        emit(status, fmt=fmt, columns=columns, kind="awx.status")
 
 
 # ---- top-level apply (multi-kind, file or directory) ----

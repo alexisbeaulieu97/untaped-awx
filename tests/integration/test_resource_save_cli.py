@@ -94,20 +94,22 @@ def test_job_templates_save_default_yaml_round_trips(fake_aap: Any) -> None:
 
 
 def test_job_templates_save_format_json_emits_envelope(fake_aap: Any) -> None:
-    """``--format json`` emits the envelope through row collection rendering
-    (one-element list, matching ``ping``'s single-row precedent)."""
+    """``--format json`` emits the single-document envelope as a bare object
+    ``{…}`` via ``emit`` (not a one-element list)."""
     _seed_basic(fake_aap)
     result = CliInvoker().invoke(
         app,
         ["job-templates", "save", "deploy", "--organization", "Default", "--format", "json"],
     )
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
-    assert isinstance(payload, list) and len(payload) == 1
-    envelope = payload[0]
+    envelope = json.loads(result.stdout)
+    assert isinstance(envelope, dict)
     assert envelope["kind"] == "JobTemplate"
     assert envelope["metadata"]["name"] == "deploy"
     assert envelope["spec"]["playbook"] == "deploy.yml"
+    # exclude_none pruning must survive emit (it receives the pre-pruned dict,
+    # not the model) — no None leaked back into the rendered spec.
+    assert all(value is not None for value in envelope["spec"].values())
 
 
 def test_job_templates_save_format_raw_emits_kind(fake_aap: Any) -> None:
