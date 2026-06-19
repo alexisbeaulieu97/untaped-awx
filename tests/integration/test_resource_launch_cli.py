@@ -257,7 +257,8 @@ def test_project_update_supports_format_json(seeded_default_org: Any) -> None:
     )
     assert result.exit_code == 0, result.output
     parsed = _json.loads(result.stdout)
-    assert isinstance(parsed, list) and parsed
+    # A single job renders as a bare object {…} via emit, not a one-element list.
+    assert isinstance(parsed, dict) and parsed
 
 
 def test_launch_stdin_emits_partial_results_when_one_fails(seeded_default_org: Any) -> None:
