@@ -198,10 +198,10 @@ dropped (paranoid net).
 
 Collected row-style AWX outputs go through core `untaped.render_rows`
 (`render_rows(rows, fmt=fmt, columns=columns)`). For `--format table`,
-it uses core `ui_context()` so global `ui:` settings and registered
+it uses core `ui_context()` so per-profile `ui:` settings and SDK built-in
 themes affect human terminal rendering (for example
 `ui.collection_view: list`). For `json`, `yaml`, and `raw`, it
-deliberately uses plain `UiContext()` so missing or invalid global
+deliberately uses plain `UiContext()` so missing or invalid configured
 themes never break structured output or pipe-oriented commands.
 
 Do not route non-row output through this helper: direct YAML envelope
