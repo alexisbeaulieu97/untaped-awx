@@ -12,6 +12,7 @@ from pathlib import Path
 
 from untaped.api import (
     OutputFormat,
+    UntapedError,
     clamp_parallel,
     echo,
     raise_usage,
@@ -19,7 +20,6 @@ from untaped.api import (
     render_rows,
     resolve_each,
 )
-from untaped.errors import UntapedError
 
 from untaped_awx.application import ApplyFile, ApplyResource, GetResource
 from untaped_awx.application.apply_file import APPLY_PARALLEL_CAP

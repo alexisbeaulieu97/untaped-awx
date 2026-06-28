@@ -10,7 +10,7 @@ and `skills` command groups every untaped tool ships.
 ## Install
 
 ```bash
-uv tool install untaped-awx
+uv tool install git+https://github.com/alexisbeaulieu97/untaped-awx.git
 ```
 
 This also contributes the `untaped-awx` agent skill. After installing, use
