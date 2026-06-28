@@ -16,7 +16,7 @@ from untaped_awx.application.ports import (
 )
 from untaped_awx.domain import Metadata, Resource, ResourceSpec
 from untaped_awx.domain.envelope import IdentityRef
-from untaped_awx.errors import BadRequest
+from untaped_awx.errors import AwxApiError, BadRequest
 from untaped_awx.infrastructure.specs import (
     CREDENTIAL_SPEC,
     GROUP_SPEC,
@@ -71,7 +71,7 @@ class _StubClient:
     ) -> Iterator[dict[str, Any]]:
         return iter([])
 
-    def get(self, spec: ResourceSpec, id_: int) -> dict[str, Any]:
+    def get(self, spec: ResourceSpec, id_: int) -> Any:
         raise NotImplementedError
 
     def find(self, spec: ResourceSpec, *, params: dict[str, str]) -> dict[str, Any] | None:
@@ -109,6 +109,36 @@ class _StubClient:
         raise NotImplementedError
 
 
+class _ServerRecord:
+    def __init__(self, data: dict[str, Any]) -> None:
+        self._data = data
+
+    def model_dump(self) -> dict[str, Any]:
+        return dict(self._data)
+
+
+class _FallbackClient(_StubClient):
+    def __init__(self, fetched: dict[str, Any]) -> None:
+        super().__init__()
+        self.fetched = fetched
+        self.get_calls: list[tuple[str, int]] = []
+
+    def get(self, spec: ResourceSpec, id_: int) -> _ServerRecord:
+        self.get_calls.append((spec.kind, id_))
+        return _ServerRecord(self.fetched)
+
+
+class _ErrorFallbackClient(_StubClient):
+    def __init__(self, error: AwxApiError) -> None:
+        super().__init__()
+        self.error = error
+        self.get_calls: list[tuple[str, int]] = []
+
+    def get(self, spec: ResourceSpec, id_: int) -> _ServerRecord:
+        self.get_calls.append((spec.kind, id_))
+        raise self.error
+
+
 class _StubStrategy:
     def __init__(self, existing: dict[str, Any] | None = None) -> None:
         self.existing = existing
@@ -127,6 +157,25 @@ class _StubStrategy:
         return {"id": existing["id"], **payload}
 
 
+class _WriteResponseStrategy(_StubStrategy):
+    def __init__(
+        self,
+        *,
+        existing: dict[str, Any] | None,
+        response: dict[str, Any],
+    ) -> None:
+        super().__init__(existing=existing)
+        self.response = response
+
+    def create(self, spec, payload, identity, *, client, fk):  # type: ignore[no-untyped-def]
+        self.created = (payload, identity)
+        return dict(self.response)
+
+    def update(self, spec, existing, payload, *, client, fk):  # type: ignore[no-untyped-def]
+        self.updated = (existing, payload)
+        return dict(self.response)
+
+
 class _StubStrategies:
     def __init__(self, strategy: _StubStrategy) -> None:
         self._strategy = strategy
@@ -140,15 +189,21 @@ def _make_apply(
     catalog_specs: dict[str, ResourceSpec],
     fk_names: dict[tuple[str, str], int],
     strategy: _StubStrategy,
+    client: RawHttpResourceClient | None = None,
     warn: list[str] | None = None,
+    allow_unverified: bool = False,
 ) -> ApplyResource:
     warn_list = warn if warn is not None else []
+    kwargs: dict[str, Any] = {}
+    if allow_unverified:
+        kwargs["allow_unverified"] = True
     return ApplyResource(
-        client=cast(RawHttpResourceClient, _StubClient()),
+        client=client if client is not None else cast(RawHttpResourceClient, _StubClient()),
         catalog=cast(Catalog, _StubCatalog(catalog_specs)),
         fk=cast(FkResolver, _StubFk(fk_names)),
         strategies=cast(StrategyResolver, _StubStrategies(strategy)),
         warn=warn_list.append,
+        **kwargs,
     )
 
 
@@ -193,6 +248,187 @@ def test_create_when_no_existing() -> None:
     assert payload["scm_type"] == "git"
 
 
+def test_create_uses_fallback_get_when_write_response_omits_field() -> None:
+    strategy = _WriteResponseStrategy(
+        existing=None,
+        response={"id": 99, "name": "playbooks", "organization": 1, "scm_type": "git"},
+    )
+    client = _FallbackClient(
+        {
+            "id": 99,
+            "name": "playbooks",
+            "organization": 1,
+            "description": "new",
+            "scm_type": "git",
+        }
+    )
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    outcome = apply(resource, write=True)
+
+    assert outcome.action == "created"
+    assert outcome.detail is None
+    assert client.get_calls == [("Project", 99)]
+
+
+def test_create_fails_when_written_field_is_not_reflected_after_get() -> None:
+    strategy = _WriteResponseStrategy(
+        existing=None,
+        response={"id": 99, "name": "playbooks", "organization": 1, "description": "old"},
+    )
+    client = _FallbackClient(
+        {"id": 99, "name": "playbooks", "organization": 1, "description": "old"}
+    )
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    with pytest.raises(BadRequest) as exc_info:
+        apply(resource, write=True)
+
+    assert client.get_calls == [("Project", 99)]
+    message = str(exc_info.value)
+    assert "description" in message
+    assert "new" not in message
+
+
+def test_create_allow_unverified_keeps_action_and_records_detail() -> None:
+    strategy = _WriteResponseStrategy(
+        existing=None,
+        response={"id": 99, "name": "playbooks", "organization": 1, "description": "old"},
+    )
+    client = _FallbackClient(
+        {"id": 99, "name": "playbooks", "organization": 1, "description": "old"}
+    )
+    warnings: list[str] = []
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+        warn=warnings,
+        allow_unverified=True,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    outcome = apply(resource, write=True)
+
+    assert outcome.action == "created"
+    assert outcome.detail is not None
+    assert "description" in outcome.detail
+    assert "new" not in outcome.detail
+    assert any("description" in warning and "new" not in warning for warning in warnings)
+
+
+def test_create_without_id_cannot_fallback_and_fails_unverified() -> None:
+    strategy = _WriteResponseStrategy(
+        existing=None,
+        response={"name": "playbooks", "organization": 1, "scm_type": "git"},
+    )
+    client = _FallbackClient(
+        {"id": 99, "name": "playbooks", "organization": 1, "description": "new"}
+    )
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    with pytest.raises(BadRequest) as exc_info:
+        apply(resource, write=True)
+
+    assert client.get_calls == []
+    assert "description" in str(exc_info.value)
+
+
+def test_create_strict_fails_when_fallback_get_errors() -> None:
+    strategy = _WriteResponseStrategy(
+        existing=None,
+        response={"id": 99, "name": "playbooks", "organization": 1, "scm_type": "git"},
+    )
+    client = _ErrorFallbackClient(AwxApiError("GET failed"))
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    with pytest.raises(BadRequest) as exc_info:
+        apply(resource, write=True)
+
+    assert client.get_calls == [("Project", 99)]
+    message = str(exc_info.value)
+    assert "description" in message
+    assert "new" not in message
+    assert "fallback GET failed" in message
+
+
+def test_create_allow_unverified_downgrades_when_fallback_get_errors() -> None:
+    strategy = _WriteResponseStrategy(
+        existing=None,
+        response={"id": 99, "name": "playbooks", "organization": 1, "scm_type": "git"},
+    )
+    client = _ErrorFallbackClient(AwxApiError("GET failed"))
+    warnings: list[str] = []
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+        warn=warnings,
+        allow_unverified=True,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    outcome = apply(resource, write=True)
+
+    assert outcome.action == "created"
+    assert outcome.detail is not None
+    assert "description" in outcome.detail
+    assert "fallback GET failed" in outcome.detail
+    assert "new" not in outcome.detail
+    assert client.get_calls == [("Project", 99)]
+    assert any("fallback GET failed" in warning for warning in warnings)
+
+
 def test_update_when_existing_differs() -> None:
     existing = {
         "id": 42,
@@ -218,6 +454,115 @@ def test_update_when_existing_differs() -> None:
     _, patch_payload = strategy.updated
     # Only changed fields are PATCHed
     assert patch_payload == {"description": "new"}
+
+
+def test_update_fails_when_written_field_is_not_reflected_after_get() -> None:
+    existing = {
+        "id": 42,
+        "name": "playbooks",
+        "organization": 1,
+        "description": "old",
+        "scm_type": "git",
+    }
+    strategy = _WriteResponseStrategy(
+        existing=existing,
+        response={"id": 42, "name": "playbooks", "organization": 1, "description": "old"},
+    )
+    client = _FallbackClient(
+        {"id": 42, "name": "playbooks", "organization": 1, "description": "old"}
+    )
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    with pytest.raises(BadRequest) as exc_info:
+        apply(resource, write=True)
+
+    assert client.get_calls == [("Project", 42)]
+    message = str(exc_info.value)
+    assert "description" in message
+    assert "new" not in message
+
+
+def test_update_uses_fallback_get_when_write_response_omits_field() -> None:
+    existing = {
+        "id": 42,
+        "name": "playbooks",
+        "organization": 1,
+        "description": "old",
+        "scm_type": "git",
+    }
+    strategy = _WriteResponseStrategy(
+        existing=existing,
+        response={"id": 42, "name": "playbooks", "organization": 1},
+    )
+    client = _FallbackClient(
+        {"id": 42, "name": "playbooks", "organization": 1, "description": "new"}
+    )
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    outcome = apply(resource, write=True)
+
+    assert outcome.action == "updated"
+    assert outcome.detail is None
+    assert client.get_calls == [("Project", 42)]
+
+
+def test_update_allow_unverified_keeps_action_and_records_detail() -> None:
+    existing = {
+        "id": 42,
+        "name": "playbooks",
+        "organization": 1,
+        "description": "old",
+        "scm_type": "git",
+    }
+    strategy = _WriteResponseStrategy(
+        existing=existing,
+        response={"id": 42, "name": "playbooks", "organization": 1, "description": "old"},
+    )
+    client = _FallbackClient(
+        {"id": 42, "name": "playbooks", "organization": 1, "description": "old"}
+    )
+    warnings: list[str] = []
+    apply = _make_apply(
+        catalog_specs={"Project": PROJECT_SPEC},
+        fk_names={("Organization", "Default"): 1},
+        strategy=strategy,
+        client=cast(RawHttpResourceClient, client),
+        warn=warnings,
+        allow_unverified=True,
+    )
+    resource = Resource(
+        kind="Project",
+        metadata=Metadata(name="playbooks", organization="Default"),
+        spec={"description": "new", "scm_type": "git"},
+    )
+
+    outcome = apply(resource, write=True)
+
+    assert outcome.action == "updated"
+    assert outcome.detail is not None
+    assert "description" in outcome.detail
+    assert "new" not in outcome.detail
+    assert any("description" in warning and "new" not in warning for warning in warnings)
 
 
 def test_unchanged_when_existing_matches() -> None:

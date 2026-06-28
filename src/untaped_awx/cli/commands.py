@@ -89,6 +89,16 @@ def apply_command(
         bool,
         Parameter(name="--yes", negative="", help="Actually write (default is preview only)."),
     ] = False,
+    allow_unverified: Annotated[
+        bool,
+        Parameter(
+            name="--allow-unverified",
+            negative="",
+            help=(
+                "Do not fail when a 2xx write response/GET cannot prove requested fields converged."
+            ),
+        ),
+    ] = False,
     fail_fast: Annotated[
         bool,
         Parameter(name="--fail-fast", negative="", help="Abort on first error."),
@@ -112,11 +122,14 @@ def apply_command(
     columns: ColumnsOption = None,
 ) -> None:
     """Apply YAML docs in dependency order. Default = preview; ``--yes`` writes."""
+    if allow_unverified and not yes:
+        raise_usage("--allow-unverified requires --yes")
     with report_errors(), open_context() as ctx:
         run_apply(
             ctx,
             file,
             write=yes,
+            allow_unverified=allow_unverified,
             fail_fast=fail_fast,
             fmt=fmt,
             columns=columns,

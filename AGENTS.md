@@ -155,7 +155,7 @@ inventory-parent both ride on the same `metadata.parent: IdentityRef` slot.
 ### Apply is preview-by-default
 
 `application/apply_resource.py` is the orchestrator; the work is split
-across four collaborators it composes:
+across five collaborators it composes:
 
 - **`ApplyPlanner`** (`apply_planner.py`) — `plan_identity` and
   `plan_payload`. **Passes `resource.spec` through** (so a field a given
@@ -163,14 +163,14 @@ across four collaborators it composes:
   `canonical_fields` allowlist), minus a drop-set: `read_only_fields`
   (server-managed), identity keys (sourced from metadata, never the spec
   body), polymorphic FKs (e.g. Schedule `parent`, carried on metadata), and
-  sub-endpoint multi-FKs (e.g. Group `hosts`, handled by the membership
-  reconciler). It then injects identity from metadata and resolves FK names
-  to ids. Fields outside the spec's known schema (`unrecognized_fields`) are
-  still sent, but the caller warns (`ApplyResource.__call__` per doc;
-  `run_apply_stdin` once per overlay). `canonical_fields` now serves as the
-  "known field" hint (drives that warning + `save` export), not a write gate.
-  Also exposes the pure `scope_for(ref, resource)` helper shared with
-  `apply_file`'s prefetch path.
+  sub-endpoint multi-FKs (e.g. Group `hosts`, JobTemplate `credentials`,
+  handled by the membership reconciler). It then injects identity from
+  metadata and resolves FK names to ids. Fields outside the spec's known
+  schema (`unrecognized_fields`) are still sent, but the caller warns
+  (`ApplyResource.__call__` per doc; `run_apply_stdin` once per overlay).
+  `canonical_fields` now serves as the "known field" hint (drives that
+  warning + `save` export), not a write gate. Also exposes the pure
+  `scope_for(ref, resource)` helper shared with `apply_file`'s prefetch path.
 - **`SecretPreservationPolicy`** (`apply_secret_policy.py`) — second-pass
   secret handling. After `_secret_paths.strip_encrypted_in_place`
   removes `$encrypted$` placeholders, the policy decides which top-level fields
@@ -184,9 +184,19 @@ across four collaborators it composes:
   entirely).
 - **`MembershipReconciler`** (`apply_membership.py`) — plans + executes
   multi-FK sub-endpoint membership writes (`Group.hosts`,
-  `Group.children`). Membership writes are kept out of the PATCH body;
-  associate/disassociate POSTs go through the
+  `Group.children`, `JobTemplate.credentials`). Membership writes are kept
+  out of the PATCH body; associate/disassociate POSTs go through the
   `<api_path>/<id>/<sub_endpoint>/` endpoint.
+- **`ApplyVerifier`** (`apply_verifier.py`) — after `POST`/`PATCH`, verifies
+  every body field actually sent is reflected by AWX. It checks the write
+  response first, then one fallback `GET`. Comparison is asymmetric:
+  scalars must equal, lists are order-insensitive, dict desired values must
+  be a recursive subset of observed values, observed JSON/YAML strings may
+  parse to structured data, and declared `secret_paths` are stripped
+  path-aware from desired and observed before comparison. Details and
+  warnings list field names only. Unreflected writes fail by default;
+  `--allow-unverified` (only valid with `--yes`) downgrades that to a
+  warning plus `ApplyOutcome.detail`.
 
 Writes require `--yes`. The diff is field-level; declared `secret_paths`
 (e.g. `inputs.*`, `webhook_key`) carrying `$encrypted$` are stripped
@@ -249,24 +259,26 @@ global `/<api_path>/<id>/` endpoint. Each spec names its strategy;
 ### Sub-endpoint multi-FK reconciliation
 
 An `FkRef(multi=True, sub_endpoint="…")` (e.g. `Group.hosts`,
-`Group.children`) declares a many-to-many edge that AWX manages via `POST
-/<api_path>/<id>/<sub_endpoint>/` with `{"id": <member>}` to associate or
-`{"id": <member>, "disassociate": true}` to remove.
+`Group.children`, `JobTemplate.credentials`) declares a many-to-many edge
+that AWX manages via `POST /<api_path>/<id>/<sub_endpoint>/` with
+`{"id": <member>}` to associate or `{"id": <member>, "disassociate": true}`
+to remove.
 `MembershipReconciler.plan` (`apply_membership.py`) diffs desired (from
 `resource.spec[<field>]`) against existing (one GET per FK ref) and appends
 `FieldChange` rows to the apply diff; `MembershipReconciler.execute` issues
 the writes after the strategy's create/update succeeds.
 
 Membership fields are *kept out of the PATCH body* so AWX never sees
-`hosts: [...]` on a Group write — body and membership writes are
-independent. An *absent* membership field is left unmanaged; an *empty
-list* explicitly clears membership. Sub-endpoint refs do not contribute
-apply-order edges, so `Group.children → Group` self-references don't trip
-the cycle detector.
+`hosts: [...]` on a Group write or `credentials: [...]` on a JobTemplate
+write — body and membership writes are independent. An *absent* membership
+field is left unmanaged; an *empty list* explicitly clears membership.
+Sub-endpoint refs do not contribute apply-order edges, so
+`Group.children → Group` self-references don't trip the cycle detector.
 
 The same write path is also exposed directly via spec-driven
 `<parent> <sub_endpoint> add/remove` subcommands (`cli/membership_commands.py`)
-for additive, sync-free use (e.g. `groups hosts add prod-web --stdin`).
+for additive, sync-free use (e.g. `groups hosts add prod-web --stdin`,
+`job-templates credentials add deploy ssh`).
 `make_resource_app` walks each spec's `FkRef(multi=True, sub_endpoint=…)`
 and attaches a nested Cyclopts sub-app via `register_membership_subapp`, so
 new multi-FK refs light up these subcommands for free.

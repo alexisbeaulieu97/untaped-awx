@@ -29,7 +29,7 @@ from untaped_awx.cli._context import AwxContext, scope_for_command
 from untaped_awx.cli._overlay import build_overlay
 from untaped_awx.cli._pipe import id_field_for
 from untaped_awx.cli.format import diff_lines, outcome_rows
-from untaped_awx.domain import ApplyOutcome, Metadata, Resource
+from untaped_awx.domain import ApplyOutcome, IdentityRef, Metadata, Resource
 from untaped_awx.infrastructure.spec import AwxResourceSpec
 from untaped_awx.infrastructure.yaml_io import read_resources
 
@@ -40,6 +40,7 @@ def run_apply(
     *,
     write: bool,
     fail_fast: bool,
+    allow_unverified: bool = False,
     fmt: OutputFormat = "table",
     columns: list[str] | None = None,
     kind_filter: str | None = None,
@@ -53,7 +54,7 @@ def run_apply(
         parallel, cap=APPLY_PARALLEL_CAP, policy="httpx.Limits.max_connections=10"
     )
     reader = _make_reader(kind_filter=kind_filter, cli_name=cli_name)
-    apply_one = _build_apply_resource(ctx)
+    apply_one = _build_apply_resource(ctx, allow_unverified=allow_unverified)
     outcomes = ApplyFile(apply_one, reader, ctx.catalog, ctx.fk, parallel=parallel)(
         file, write=write, fail_fast=fail_fast
     )
@@ -74,6 +75,7 @@ def run_apply_stdin(
     set_pairs: list[str] | None,
     patch_file: Path | None,
     by_id: bool,
+    allow_unverified: bool = False,
     organization: str | None = None,
     inventory: str | None = None,
     inventory_organization: str | None = None,
@@ -104,12 +106,12 @@ def run_apply_stdin(
         ids,
         lambda ident: (ident, getter.by_identifier(spec, ident, scope=scope, by_id=by_id)),
     )
-    apply_one = _build_apply_resource(ctx)
+    apply_one = _build_apply_resource(ctx, allow_unverified=allow_unverified)
     outcomes: list[ApplyOutcome] = []
     for ident, record in resolved:
         resource = Resource(
             kind=spec.kind,
-            metadata=Metadata(name=str(record.get("name", ident))),
+            metadata=_metadata_for_stdin(spec, ident, record, scope),
             spec=dict(overlay),
         )
         try:
@@ -150,7 +152,72 @@ def _make_reader(*, kind_filter: str | None, cli_name: str | None) -> ResourceDo
     return _reader
 
 
-def _build_apply_resource(ctx: AwxContext) -> ApplyResource:
+def _metadata_for_stdin(
+    spec: AwxResourceSpec,
+    ident: str,
+    record: dict[str, object],
+    scope: dict[str, str] | None,
+) -> Metadata:
+    name = str(record.get("name", ident))
+    if spec.apply_strategy == "inventory_child":
+        inventory = (scope or {}).get("inventory") or _record_inventory_name(record)
+        inventory_org = (scope or {}).get("inventory__organization") or _record_inventory_org(
+            record
+        )
+        if inventory:
+            return Metadata(
+                name=name,
+                parent=IdentityRef(kind="Inventory", name=inventory, organization=inventory_org),
+            )
+        return Metadata(name=name)
+    organization = None
+    if "organization" in spec.identity_keys:
+        organization = (scope or {}).get("organization") or _record_organization_name(record)
+    return Metadata(name=name, organization=organization)
+
+
+def _record_organization_name(record: dict[str, object]) -> str | None:
+    value = record.get("organization_name")
+    if isinstance(value, str) and value:
+        return value
+    summary = record.get("summary_fields")
+    if isinstance(summary, dict):
+        org = summary.get("organization")
+        if isinstance(org, dict):
+            name = org.get("name")
+            if isinstance(name, str) and name:
+                return name
+    return None
+
+
+def _record_inventory_name(record: dict[str, object]) -> str | None:
+    value = record.get("inventory_name")
+    if isinstance(value, str) and value:
+        return value
+    inventory = _record_inventory_summary(record)
+    if inventory is None:
+        return None
+    name = inventory.get("name")
+    return name if isinstance(name, str) and name else None
+
+
+def _record_inventory_org(record: dict[str, object]) -> str | None:
+    inventory = _record_inventory_summary(record)
+    if inventory is None:
+        return None
+    name = inventory.get("organization_name")
+    return name if isinstance(name, str) and name else None
+
+
+def _record_inventory_summary(record: dict[str, object]) -> dict[str, object] | None:
+    summary = record.get("summary_fields")
+    if not isinstance(summary, dict):
+        return None
+    inventory = summary.get("inventory")
+    return inventory if isinstance(inventory, dict) else None
+
+
+def _build_apply_resource(ctx: AwxContext, *, allow_unverified: bool = False) -> ApplyResource:
     def _warn(msg: str) -> None:
         echo(f"warning: {msg}", err=True)
 
@@ -160,6 +227,7 @@ def _build_apply_resource(ctx: AwxContext) -> ApplyResource:
         fk=ctx.fk,
         strategies=ctx.strategies,
         warn=_warn,
+        allow_unverified=allow_unverified,
     )
 
 

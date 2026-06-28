@@ -76,6 +76,21 @@ def test_job_templates_save_translates_fks(fake_aap: Any, tmp_path: Path) -> Non
     assert "inventory: prod" in text
 
 
+def test_job_templates_save_emits_credentials_from_sub_endpoint(fake_aap: Any) -> None:
+    _seed_basic(fake_aap)
+    fake_aap.seed("credentials", id=40, name="ssh", organization=1, organization_name="Default")
+    fake_aap.seed("credentials", id=41, name="vault", organization=1, organization_name="Default")
+    fake_aap.memberships[("job_templates", 30, "credentials")] = {40, 41}
+
+    result = CliInvoker().invoke(
+        app, ["job-templates", "save", "deploy", "--organization", "Default"]
+    )
+
+    assert result.exit_code == 0, result.output
+    doc = yaml.safe_load(result.stdout)
+    assert sorted(doc["spec"]["credentials"]) == ["ssh", "vault"]
+
+
 def test_job_templates_save_default_yaml_round_trips(fake_aap: Any) -> None:
     """Default stdout (no ``--out``, no ``--format``) is a bare YAML
     envelope — a single mapping that ``read_resources`` can ingest
@@ -91,6 +106,26 @@ def test_job_templates_save_default_yaml_round_trips(fake_aap: Any) -> None:
     assert isinstance(doc, dict), f"expected bare mapping, got {type(doc).__name__}"
     assert doc["kind"] == "JobTemplate"
     Resource.model_validate(doc)
+
+
+def test_job_templates_save_apply_round_trips_string_extra_vars(
+    fake_aap: Any, tmp_path: Path
+) -> None:
+    _seed_basic(fake_aap)
+    fake_aap.get_record("job_templates", 30)["extra_vars"] = "answer: 42\n"
+    save_result = CliInvoker().invoke(
+        app, ["job-templates", "save", "deploy", "--organization", "Default"]
+    )
+    assert save_result.exit_code == 0, save_result.output
+    saved = tmp_path / "jt.yml"
+    saved.write_text(save_result.stdout)
+
+    fake_aap.get_record("job_templates", 30)["extra_vars"] = "answer: 41\n"
+    apply_result = CliInvoker().invoke(app, ["job-templates", "apply", str(saved), "--yes"])
+
+    assert apply_result.exit_code == 0, apply_result.output
+    assert "unverified" not in apply_result.output.lower()
+    assert fake_aap.get_record("job_templates", 30)["extra_vars"] == "answer: 42\n"
 
 
 def test_job_templates_save_format_json_emits_envelope(fake_aap: Any) -> None:

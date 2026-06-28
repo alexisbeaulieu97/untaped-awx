@@ -64,7 +64,7 @@ versus read-only depends on a per-kind **fidelity** tier:
 | `projects`           | `Project`             | full      | yes  | yes   | also supports `update` (SCM sync)                           |
 | `schedules`          | `Schedule`            | full      | yes  | yes   | parent (JT or workflow) must exist                          |
 | `workflow-templates` | `WorkflowJobTemplate` | partial   | yes  | yes   | also `launch`; node graph + edges not roundtripped          |
-| `credentials`        | `Credential`          | read_only | no   | no    | list / get only — `$encrypted$` roundtrip deferred to v0.5  |
+| `credentials`        | `Credential`          | read_only | no   | no    | list / get only; JobTemplate credential membership is managed from `job-templates` |
 | `organizations`      | `Organization`        | read_only | no   | no    | list / get only                                             |
 | `inventories`        | `Inventory`           | read_only | no   | no    | list / get only                                             |
 | `credential-types`   | `CredentialType`      | read_only | no   | no    | list / get only                                             |
@@ -92,11 +92,12 @@ untaped-awx <kind> get <name>... [--stdin] [--organization <org>|--org <org>]
 
 untaped-awx <kind> save <name> [--out FILE] [--organization <org>|--org <org>]
 
-untaped-awx <kind> apply FILE [--yes] [--fail-fast]
+untaped-awx <kind> apply FILE [--yes] [--allow-unverified] [--fail-fast]
                          [--format json|yaml|table|raw|pipe] [--columns ...]
 # Mass-patch a piped selection instead of a file:
 untaped-awx <kind> apply --stdin (--set NAME=VALUE... | --patch-file FILE)
-                         [--yes] [--by-id] [--organization <org>|--org <org>]
+                         [--yes] [--allow-unverified]
+                         [--by-id] [--organization <org>|--org <org>]
 # Exactly one of {FILE, --stdin}.
 
 untaped-awx <kind> delete [<name>...] [--stdin] [--yes] [--dry-run]
@@ -150,7 +151,8 @@ echo -e "deploy-web\ndeploy-api" \
 
 Any kind whose spec declares an `FkRef(multi=True, sub_endpoint=…)`
 automatically gets a nested `add` / `remove` sub-app for that edge.
-Today that's `groups hosts` and `groups children`. The verbs are
+Today that's `groups hosts`, `groups children`, and
+`job-templates credentials`. The verbs are
 additive — they don't read existing members first, just POST
 associate/disassociate into AWX (which returns 204 on re-add or
 re-remove, so they're safe to run repeatedly).
@@ -166,6 +168,9 @@ untaped-awx hosts list --filter inventory__name=prod \
 
 # Remove the inverse
 untaped-awx groups hosts remove prod-web host-01
+
+# Attach credentials to a job template
+untaped-awx job-templates credentials add deploy-app ssh-key vault-key --org Engineering
 ```
 
 For nested fields outside the FK set (e.g. last-job status, polymorphic
@@ -213,12 +218,24 @@ field-level; declared secret paths (`inputs.*`, `webhook_key`)
 carrying `$encrypted$` are stripped from the PATCH and shown as
 `(preserved existing secret)` rows.
 
+After a write, apply verifies the body fields it actually sent. It checks
+the POST/PATCH response first, then one fallback GET. HTTP 2xx alone is
+not treated as convergence proof: if a requested field is not reflected,
+the item fails by default. `--allow-unverified` is available only with
+`--yes`; it keeps the `created` / `updated` action, adds `detail`, and
+prints a warning instead of failing. Verification compares desired state
+as "reflected in observed": scalars equal, lists order-insensitive, dicts
+recursive-subset so AWX-added defaults are allowed, observed JSON/YAML
+strings may be parsed, and declared secret paths are stripped before
+comparison. Diagnostics list field names only, never values.
+
 The fields you provide are **passed through to AWX as-is**, so a field your
 AWX version accepts works without waiting for a tool update. Read-only /
 server-managed fields and identity (`name`, `organization`, `parent`) are
 handled automatically, foreign keys still resolve by name, and any field
 this tool has no metadata for is sent with a `warning:` so a typo stays
-visible rather than silently no-op'ing on the server.
+visible. If AWX accepts the request but ignores that field, the post-write
+verification above catches it unless you explicitly used `--allow-unverified`.
 
 `apply --stdin` mass-patches a piped *selection* instead of a file:
 pipe a `list` into it, overlay the fields to change with `--set
@@ -312,7 +329,7 @@ Triggers an SCM sync on the project.
 ### `untaped-awx apply` (multi-kind)
 
 ```bash
-untaped-awx apply FILE_OR_DIR [--yes] [--fail-fast]
+untaped-awx apply FILE_OR_DIR [--yes] [--allow-unverified] [--fail-fast]
 ```
 
 Apply a single file or a whole directory of YAML envelopes. When

@@ -62,6 +62,17 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
             bool,
             Parameter(name="--yes", negative="", help="Actually write (default is preview only)."),
         ] = False,
+        allow_unverified: Annotated[
+            bool,
+            Parameter(
+                name="--allow-unverified",
+                negative="",
+                help=(
+                    "Do not fail when a 2xx write response/GET cannot prove requested "
+                    "fields converged. Requires --yes."
+                ),
+            ),
+        ] = False,
         fail_fast: Annotated[
             bool,
             Parameter(name="--fail-fast", negative="", help="Abort on first error (file mode)."),
@@ -109,6 +120,8 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
                 or inventory_organization is not None
             ):
                 raise_usage("--set/--patch-file/--by-id and scope flags only apply with --stdin")
+        if allow_unverified and not yes:
+            raise_usage("--allow-unverified requires --yes")
 
         with report_errors(), open_context() as ctx:
             if stdin:
@@ -116,6 +129,7 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
                     ctx,
                     spec,
                     write=yes,
+                    allow_unverified=allow_unverified,
                     set_pairs=set_,
                     patch_file=patch_file,
                     by_id=by_id,
@@ -131,6 +145,7 @@ def _add_apply(app: App, spec: AwxResourceSpec) -> None:
                     ctx,
                     file,
                     write=yes,
+                    allow_unverified=allow_unverified,
                     fail_fast=fail_fast,
                     fmt=fmt,
                     columns=columns,
