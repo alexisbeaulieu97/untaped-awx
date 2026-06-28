@@ -43,6 +43,16 @@ class _StubClient:
     ) -> ServerRecord | None:
         raise AssertionError("SaveResources must use bulk list(), not find_by_identity()")
 
+    def paginate_sub_endpoint(
+        self,
+        spec: ResourceSpec,
+        record_id: int,
+        sub_endpoint: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        return iter(())
+
 
 class _StubFk:
     def __init__(self, names: dict[tuple[str, int], str]) -> None:

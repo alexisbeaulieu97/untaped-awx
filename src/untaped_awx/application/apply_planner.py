@@ -1,7 +1,7 @@
 """Build the identity dict and resolved payload for the apply pipeline.
 
 :class:`ApplyPlanner` is the first collaborator the orchestrator hits:
-it projects ``resource.spec`` onto ``spec.canonical_fields``, resolves
+it passes ``resource.spec`` through minus the apply drop-set, resolves
 FK names to ids, drops sub-endpoint multi-FKs (those go through the
 membership reconciler, not PATCH), and returns the identity dict
 strategies use to ``find_existing``.
@@ -80,8 +80,9 @@ class ApplyPlanner:
         - ``identity_keys`` — identity lives in ``metadata``, never the spec, so
           a stray ``spec.name``/``spec.organization`` can't override it;
         - polymorphic FK fields (e.g. Schedule ``parent``) — carried on metadata;
-        - ``sub_endpoint`` multi-FKs (e.g. Group ``hosts``) — reconciled
-          out-of-band via associate/disassociate POSTs, not the body.
+        - ``sub_endpoint`` multi-FKs (e.g. Group ``hosts``, JobTemplate
+          ``credentials``) — reconciled out-of-band via
+          associate/disassociate POSTs, not the body.
         """
         raw = resource.spec
         # FK fields handled out-of-band (polymorphic ⇒ metadata; sub_endpoint

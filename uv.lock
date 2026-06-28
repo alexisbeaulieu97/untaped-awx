@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "untaped-awx"
-version = "0.8.0"
+version = "0.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "cyclopts" },

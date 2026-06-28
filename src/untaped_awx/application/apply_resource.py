@@ -17,6 +17,7 @@ from untaped_awx.application.apply_field_diff import PRESERVED_SECRET_NOTE, Fiel
 from untaped_awx.application.apply_membership import MembershipPlan, MembershipReconciler
 from untaped_awx.application.apply_planner import ApplyPlanner, unrecognized_warning
 from untaped_awx.application.apply_secret_policy import SecretPreservationPolicy
+from untaped_awx.application.apply_verifier import ApplyVerifier
 from untaped_awx.application.ports import (
     ApplyStrategy,
     Catalog,
@@ -30,7 +31,7 @@ from untaped_awx.domain import (
     Resource,
     ResourceSpec,
 )
-from untaped_awx.errors import BadRequest
+from untaped_awx.errors import AwxApiError, BadRequest
 
 WarnFn = Callable[[str], None]
 
@@ -51,6 +52,8 @@ class ApplyResource:
         field_diff: FieldDiff | None = None,
         membership: MembershipReconciler | None = None,
         planner: ApplyPlanner | None = None,
+        verifier: ApplyVerifier | None = None,
+        allow_unverified: bool = False,
     ) -> None:
         self._client = client
         self._catalog = catalog
@@ -61,6 +64,8 @@ class ApplyResource:
         self._field_diff = field_diff or FieldDiff()
         self._membership = membership or MembershipReconciler()
         self._planner = planner or ApplyPlanner()
+        self._verifier = verifier or ApplyVerifier(secret_policy=self._secret_policy)
+        self._allow_unverified = allow_unverified
 
     def __call__(
         self,
@@ -172,9 +177,8 @@ class ApplyResource:
         kinds) so the second pass is essentially free.
         """
         spec = self._catalog.get(resource.kind)
-        # Short-circuit kinds without sub-endpoint refs — phase 2 is only
-        # meaningful for Group (hosts/children) today. Saves an extra
-        # find_existing call per non-Group doc.
+        # Short-circuit kinds without sub-endpoint refs. Saves an extra
+        # find_existing call per doc that has no membership state.
         if not any(ref.multi and ref.sub_endpoint for ref in spec.fk_refs):
             return []
         identity = self._planner.plan_identity(spec, resource)
@@ -245,7 +249,8 @@ class ApplyResource:
         )
 
         # Membership reconciliation (multi-FK + sub_endpoint, e.g.
-        # ``Group.hosts`` / ``Group.children``). The plan is computed
+        # ``Group.hosts`` / ``Group.children`` / ``JobTemplate.credentials``).
+        # The plan is computed
         # *now* so its diff appears in preview output. When
         # ``defer_memberships=True``, planning is skipped entirely —
         # phase 1 of two-phase apply only writes bodies; the deferred
@@ -323,21 +328,34 @@ class ApplyResource:
                 f"or pre-create the resource in AWX first"
             )
         result = strategy.create(spec, payload, identity, client=self._client, fk=self._fk)
+        result_id = result.get("id") if isinstance(result, dict) else None
+        new_id = int(result_id) if result_id is not None else None
+        if membership_plans and result_id is None:
+            # All current strategies populate ``id``. If a future strategy
+            # ever returns a body without it (or an opaque non-dict), the
+            # resource has been created but membership writes can't
+            # target it — fail loudly rather than silently skip.
+            raise BadRequest(
+                f"{spec.kind} {resource.metadata.name!r}: create response had no "
+                f"'id'; cannot reconcile membership for "
+                f"{', '.join(p.ref.field for p in membership_plans)}"
+            )
+        # Verify body convergence before membership writes. A strict failure
+        # may leave a created resource without memberships, which is safer than
+        # attaching memberships to an unverified body.
+        detail = self._verify_payload(
+            spec=spec,
+            resource=resource,
+            payload=payload,
+            sent_fields=tuple(payload),
+            write_response=result if isinstance(result, dict) else {},
+            record_id=new_id,
+        )
         if membership_plans:
-            new_id_value = result.get("id") if isinstance(result, dict) else None
-            if new_id_value is None:
-                # All current strategies populate ``id``. If a future strategy
-                # ever returns a body without it (or an opaque non-dict), the
-                # resource has been created but membership writes can't
-                # target it — fail loudly rather than silently skip.
-                raise BadRequest(
-                    f"{spec.kind} {resource.metadata.name!r}: create response had no "
-                    f"'id'; cannot reconcile membership for "
-                    f"{', '.join(p.ref.field for p in membership_plans)}"
-                )
+            assert new_id is not None
             self._membership.execute(
                 spec,
-                int(new_id_value),
+                new_id,
                 membership_plans,
                 client=self._client,
             )
@@ -348,6 +366,7 @@ class ApplyResource:
             changes=changes,
             preserved_secrets=[],
             dropped_undeclared_secrets=dropped_undeclared,
+            detail=detail,
         )
 
     def _do_update(
@@ -384,13 +403,23 @@ class ApplyResource:
             )
         if changed_fields:
             update_payload = {k: v for k, v in payload.items() if k in changed_fields}
-            strategy.update(
+            result = strategy.update(
                 spec,
                 existing,
                 update_payload,
                 client=self._client,
                 fk=self._fk,
             )
+            detail = self._verify_payload(
+                spec=spec,
+                resource=resource,
+                payload=update_payload,
+                sent_fields=tuple(update_payload),
+                write_response=result if isinstance(result, dict) else {},
+                record_id=int(existing["id"]),
+            )
+        else:
+            detail = None
         if membership_changed:
             self._membership.execute(
                 spec,
@@ -405,7 +434,60 @@ class ApplyResource:
             changes=changes,
             preserved_secrets=preserved,
             dropped_undeclared_secrets=dropped_undeclared,
+            detail=detail,
         )
+
+    def _verify_payload(
+        self,
+        *,
+        spec: ResourceSpec,
+        resource: Resource,
+        payload: dict[str, Any],
+        sent_fields: tuple[str, ...],
+        write_response: dict[str, Any],
+        record_id: int | None,
+    ) -> str | None:
+        """Verify that AWX reflected the fields sent in the body."""
+        unreflected = self._verifier.unreflected_fields(
+            spec,
+            payload,
+            write_response,
+            fields=sent_fields,
+        )
+        fallback_error: AwxApiError | None = None
+        if unreflected and record_id is not None:
+            try:
+                after = self._client.get(spec, record_id).model_dump()
+            except AwxApiError as exc:
+                fallback_error = exc
+            else:
+                unreflected = self._verifier.unreflected_fields(
+                    spec,
+                    payload,
+                    after,
+                    fields=sent_fields,
+                )
+        if not unreflected:
+            return None
+        detail = (
+            "unverified field(s): "
+            f"{', '.join(sorted(unreflected))}; requested state was not reflected by AWX"
+        )
+        if fallback_error is not None:
+            detail = f"{detail}; fallback GET failed"
+        if self._allow_unverified:
+            self._warn(
+                f"{spec.kind} {resource.metadata.name!r}: {detail}; "
+                "continuing because --allow-unverified was set"
+            )
+            return detail
+        message = (
+            f"{spec.kind} {resource.metadata.name!r}: {detail}. "
+            "Use --allow-unverified with --yes to keep an accepted-but-unproven write."
+        )
+        if fallback_error is not None:
+            raise BadRequest(message) from fallback_error
+        raise BadRequest(message)
 
 
 __all__ = ["ApplyResource"]

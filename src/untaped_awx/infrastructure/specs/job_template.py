@@ -87,6 +87,7 @@ JOB_TEMPLATE_SPEC = AwxResourceSpec(
             kind="Credential",
             scope_field="organization",
             multi=True,
+            sub_endpoint="credentials",
         ),
     ),
     launch_fk_refs=(

@@ -83,6 +83,27 @@ def test_job_template_launch_fk_refs() -> None:
     assert fields["instance_groups"].kind == "InstanceGroup" and fields["instance_groups"].multi
 
 
+def test_apply_multi_fk_refs_have_sub_endpoints() -> None:
+    """Apply-time multi-FKs must reconcile through explicit sub-endpoints.
+
+    Launch-only multi-FKs are intentionally out of scope: fields like
+    JobTemplate.labels are launch payload overrides, not resource-body state.
+    """
+    jt_launch_fields = {
+        fk.field: fk for fk in AwxResourceCatalog().get("JobTemplate").launch_fk_refs
+    }
+    assert jt_launch_fields["labels"].multi and jt_launch_fields["labels"].sub_endpoint is None
+
+    missing = [
+        f"{spec.kind}.{ref.field}"
+        for spec in ALL_SPECS
+        if "apply" in spec.commands
+        for ref in spec.fk_refs
+        if ref.multi and ref.sub_endpoint is None
+    ]
+    assert not missing
+
+
 def test_specs_without_apply_command_are_read_only() -> None:
     """Every spec opting out of apply via ``commands`` must also be ``read_only``.
 

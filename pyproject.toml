@@ -1,6 +1,6 @@
 [project]
 name = "untaped-awx"
-version = "0.8.0"
+version = "0.9.0"
 description = "Ansible Automation Platform / AWX CLI built on the untaped SDK."
 readme = "README.md"
 authors = [

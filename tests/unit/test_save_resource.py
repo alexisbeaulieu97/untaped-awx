@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, cast
 
 from untaped_awx.application import SaveResource
@@ -17,13 +18,18 @@ class _StubClient:
     ``(name, scope) → params`` translation path here (see
     ``test_get_resource.py`` for that). ``SaveResource.__call__`` only
     invokes ``find_by_identity`` followed by an in-memory record-to-
-    Resource transform; the ``list`` and ``paginate_sub_endpoint``
-    paths only fire from bulk save and from sub-endpoint multi-FKs
-    (Group.hosts / Group.children), neither of which these tests cover.
+    Resource transform; ``paginate_sub_endpoint`` fires for sub-endpoint
+    multi-FKs such as JobTemplate.credentials.
     """
 
-    def __init__(self, *, find_result: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        *,
+        find_result: dict[str, Any],
+        sub_members: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> None:
         self._find_result = find_result
+        self._sub_members = sub_members or {}
 
     def find_by_identity(
         self,
@@ -33,6 +39,16 @@ class _StubClient:
         scope: dict[str, str] | None = None,
     ) -> ServerRecord | None:
         return ServerRecord(**self._find_result)
+
+    def paginate_sub_endpoint(
+        self,
+        spec: ResourceSpec,
+        record_id: int,
+        sub_endpoint: str,
+        *,
+        params: dict[str, str] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        return iter(self._sub_members.get(sub_endpoint, []))
 
 
 class _StubFk:
@@ -54,8 +70,13 @@ def test_save_resource_translates_fk_ids_to_names() -> None:
             "project": 5,
             "inventory": 7,
             "playbook": "deploy.yml",
-            "credentials": [10, 11],
-        }
+        },
+        sub_members={
+            "credentials": [
+                {"id": 10, "name": "ssh-key"},
+                {"id": 11, "name": "vault-pw"},
+            ]
+        },
     )
     fk = _StubFk(
         {

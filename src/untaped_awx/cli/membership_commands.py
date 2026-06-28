@@ -129,6 +129,9 @@ def _add_membership_verb(
 def _member_scope(parent_rec: dict[str, Any], ref: FkRef) -> dict[str, str] | None:
     """Derive the scope dict for member name lookups from the parent record.
 
+    For ``scope_field="organization"`` refs (JobTemplate ``credentials``),
+    members live in the same organization as the parent template.
+
     For ``scope_field="inventory"`` refs (Group's ``hosts`` / ``children``),
     members live in the same inventory as the parent and we pull both
     ``name`` and ``organization_name`` out of ``summary_fields.inventory``
@@ -137,9 +140,17 @@ def _member_scope(parent_rec: dict[str, Any], ref: FkRef) -> dict[str, str] | No
     name lookup entirely so a missing scope only matters when the user
     pipes names.
     """
+    if ref.scope_field == "organization":
+        organization = _organization_name(parent_rec)
+        if organization:
+            return {"organization": organization}
+        return None
     if ref.scope_field != "inventory":
         return None
-    inv = parent_rec.get("summary_fields", {}).get("inventory")
+    summary = parent_rec.get("summary_fields")
+    if not isinstance(summary, dict):
+        return None
+    inv = summary.get("inventory")
     if not isinstance(inv, dict):
         return None
     name = inv.get("name")
@@ -150,3 +161,17 @@ def _member_scope(parent_rec: dict[str, Any], ref: FkRef) -> dict[str, str] | No
     if isinstance(org_name, str) and org_name:
         scope["inventory__organization"] = org_name
     return scope
+
+
+def _organization_name(parent_rec: dict[str, Any]) -> str | None:
+    value = parent_rec.get("organization_name")
+    if isinstance(value, str) and value:
+        return value
+    summary = parent_rec.get("summary_fields")
+    if not isinstance(summary, dict):
+        return None
+    org = summary.get("organization")
+    if not isinstance(org, dict):
+        return None
+    name = org.get("name")
+    return name if isinstance(name, str) and name else None

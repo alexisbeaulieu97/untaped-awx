@@ -18,7 +18,7 @@ from untaped_awx.application.ports import FkResolver, ResourceClient
 from untaped_awx.domain import FieldChange, FkRef, Metadata, Resource, ResourceSpec
 from untaped_awx.domain.envelope import IdentityRef
 from untaped_awx.errors import BadRequest
-from untaped_awx.infrastructure.specs import GROUP_SPEC, JOB_TEMPLATE_SPEC
+from untaped_awx.infrastructure.specs import GROUP_SPEC, JOB_TEMPLATE_SPEC, PROJECT_SPEC
 
 
 class _StubClient:
@@ -92,17 +92,41 @@ def _group(
 
 
 def test_plan_returns_empty_for_kinds_without_sub_endpoint_refs() -> None:
-    """JobTemplate has no FkRefs with multi=True + sub_endpoint, so the
-    reconciler has no work."""
+    """Kinds with no FkRefs with multi=True + sub_endpoint have no work."""
     rec = MembershipReconciler()
     plans = rec.plan(
-        JOB_TEMPLATE_SPEC,
-        Resource(kind="JobTemplate", metadata=Metadata(name="t"), spec={}),
+        PROJECT_SPEC,
+        Resource(kind="Project", metadata=Metadata(name="p"), spec={}),
         record_id=1,
         client=cast(ResourceClient, _StubClient()),
         fk=cast(FkResolver, _StubFk({})),
     )
     assert plans == []
+
+
+def test_plan_reconciles_job_template_credentials() -> None:
+    rec = MembershipReconciler()
+    plans = rec.plan(
+        JOB_TEMPLATE_SPEC,
+        Resource(
+            kind="JobTemplate",
+            metadata=Metadata(name="deploy", organization="Default"),
+            spec={"credentials": ["ssh", "vault"]},
+        ),
+        record_id=42,
+        client=cast(
+            ResourceClient,
+            _StubClient(existing_members={"credentials": [{"id": 30, "name": "ssh"}]}),
+        ),
+        fk=cast(FkResolver, _StubFk({("Credential", "ssh"): 30, ("Credential", "vault"): 31})),
+    )
+
+    cred_plan = next(p for p in plans if p.ref.field == "credentials")
+    assert cred_plan.to_associate == (31,)
+    assert cred_plan.to_disassociate == ()
+    assert cred_plan.field_change is not None
+    assert cred_plan.field_change.before == ["ssh"]
+    assert cred_plan.field_change.after == ["ssh", "vault"]
 
 
 def test_plan_skips_field_absent_from_resource_spec() -> None:

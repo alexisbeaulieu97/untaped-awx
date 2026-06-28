@@ -234,7 +234,12 @@ def test_plan_payload_resolves_single_fks_to_ids() -> None:
     assert payload["inventory"] == 7
 
 
-def test_plan_payload_resolves_multi_fks_to_id_lists() -> None:
+def test_plan_payload_omits_credentials_from_body() -> None:
+    """JobTemplate credentials are an AWX sub-endpoint membership.
+
+    They must not be PATCHed as a body list: real AWX accepts 2xx but ignores
+    that field on the JobTemplate serializer.
+    """
     planner = ApplyPlanner()
     resource = Resource(
         kind="JobTemplate",
@@ -258,7 +263,7 @@ def test_plan_payload_resolves_multi_fks_to_id_lists() -> None:
             ),
         ),
     )
-    assert payload["credentials"] == [10, 11]
+    assert "credentials" not in payload
 
 
 def test_plan_payload_drops_sub_endpoint_multi_fk_from_body() -> None:

@@ -10,6 +10,7 @@ fixture argument; the type can be imported via the module path
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from collections import defaultdict
@@ -50,6 +51,9 @@ class FakeAap:
         # set these before each call.
         self.next_action_status: str = "successful"
         self.next_action_stdout: str | None = None
+        self.ignored_write_fields: set[str] = set()
+        self.mask_secret_write_response = False
+        self.enrich_survey_spec_response = False
 
     def seed(self, api_path: str, **fields: Any) -> dict[str, Any]:
         record_id = fields.pop("id", None) or self._next_id
@@ -165,7 +169,7 @@ class FakeAap:
     def _create(self, api_path: str, body: dict[str, Any]) -> httpx.Response:
         new_id = self._next_id
         self._next_id += 1
-        record = {"id": new_id, **body}
+        record = {"id": new_id, **self._write_body(api_path, body)}
         self.store[api_path][new_id] = record
         return httpx.Response(201, json=record)
 
@@ -173,8 +177,25 @@ class FakeAap:
         record = self.store.get(api_path, {}).get(id_)
         if record is None:
             return _err(404, f"{api_path}/{id_}/ not found")
-        record.update(body)
+        record.update(self._write_body(api_path, body))
         return httpx.Response(200, json=record)
+
+    def _write_body(self, api_path: str, body: dict[str, Any]) -> dict[str, Any]:
+        stored = {
+            key: copy.deepcopy(value)
+            for key, value in body.items()
+            if key not in self.ignored_write_fields
+        }
+        if self.enrich_survey_spec_response and "survey_spec" in stored:
+            stored["survey_spec"] = _enrich_survey_spec(stored["survey_spec"])
+        if self.mask_secret_write_response and api_path in {
+            "job_templates",
+            "workflow_job_templates",
+        }:
+            if "webhook_key" in stored:
+                stored["webhook_key"] = "$encrypted$"
+            _mask_survey_defaults(stored.get("survey_spec"))
+        return stored
 
     def _delete(self, api_path: str, id_: int) -> httpx.Response:
         # Match real AWX: DELETE on a missing id returns 404 (the
@@ -492,6 +513,34 @@ def _numeric_compare(
         return False
     except ValueError:
         return False
+
+
+def _enrich_survey_spec(value: Any) -> Any:
+    enriched = copy.deepcopy(value)
+    if not isinstance(enriched, dict):
+        return enriched
+    questions = enriched.get("spec")
+    if not isinstance(questions, list):
+        return enriched
+    for question in questions:
+        if not isinstance(question, dict):
+            continue
+        question.setdefault("required", False)
+        question.setdefault("min", None)
+        question.setdefault("max", None)
+        question.setdefault("new_question", False)
+    return enriched
+
+
+def _mask_survey_defaults(value: Any) -> None:
+    if not isinstance(value, dict):
+        return
+    questions = value.get("spec")
+    if not isinstance(questions, list):
+        return
+    for question in questions:
+        if isinstance(question, dict) and "default" in question:
+            question["default"] = "$encrypted$"
 
 
 def _err(status: int, detail: str) -> httpx.Response:

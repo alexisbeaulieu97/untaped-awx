@@ -1,8 +1,9 @@
 """Use case: produce a canonical :class:`Resource` envelope for an AWX object.
 
-Save extracts only the fields declared in ``spec.canonical_fields``,
-strips read-only fields, and translates FK IDs back to human names so
-the resulting file is portable across AWX instances.
+Save extracts fields declared in ``spec.canonical_fields``, augments
+sub-endpoint membership fields where needed, strips read-only fields, and
+translates FK IDs back to human names so the resulting file is portable
+across AWX instances.
 
 Schedule's polymorphic parent is extracted from AWX's
 ``unified_job_template`` + ``summary_fields`` so it ends up in
@@ -66,12 +67,11 @@ class SaveResource:
 
     def _build_resource(self, spec: ResourceSpec, record: dict[str, Any]) -> Resource:
         spec_data = self._build_spec_body(spec, record)
-        # Sub-endpoint multi-FKs (Group.hosts / Group.children) live
-        # outside ``canonical_fields`` because they're managed via
-        # associate / disassociate POSTs against ``/<id>/<sub>/`` rather
-        # than the body. For full-fidelity save we still need to read
-        # them so the saved YAML can reconstruct the membership on
-        # restore.
+        # Sub-endpoint multi-FKs (Group.hosts / Group.children /
+        # JobTemplate.credentials) are managed via associate/disassociate
+        # POSTs against ``/<id>/<sub>/`` rather than the body. For
+        # full-fidelity save we still need to read them so the saved YAML
+        # can reconstruct the membership on restore.
         record_id = record.get("id")
         if isinstance(record_id, int):
             for ref in spec.fk_refs:
