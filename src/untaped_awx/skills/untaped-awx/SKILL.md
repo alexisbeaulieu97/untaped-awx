@@ -9,7 +9,7 @@ Use this skill when the user wants an agent to operate the `untaped-awx` CLI for
 
 ## Setup
 
-- `untaped-awx` is a standalone CLI built on the untaped SDK. Install it with `uv tool install untaped-awx`.
+- `untaped-awx` is a standalone CLI built on the untaped SDK. Install it with `uv tool install git+https://github.com/alexisbeaulieu97/untaped-awx.git`.
 - Settings live under `profiles.<name>.awx`: `base_url`, `token`, `api_prefix`, `default_organization`, and `page_size`.
 - AAP uses the default `awx.api_prefix` of `/api/controller/v2/`; upstream AWX users usually set `/api/v2/`.
 - Use `untaped-awx config set awx.token --prompt` or `--stdin` for tokens.
